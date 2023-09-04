@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "ocean-eco-map-server"
+version = "0.1.0"
+description = ""
+authors = ["emely3h <emely3h@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+rio-tiler = "^6.0.2"
+pydantic = "^2.3.0"
+fastapi = "^0.103.1"
+uvicorn = "^0.23.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
