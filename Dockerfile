@@ -1,5 +1,5 @@
 
-FROM amd64/python:3.8
+FROM amd64/python:3.11
 #python:3.11-bookworm
 
 WORKDIR /code
