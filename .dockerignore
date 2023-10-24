@@ -1,4 +1,5 @@
-cdk*# Elastic Beanstalk Files
+cdk*
+# Elastic Beanstalk Files
 .elasticbeanstalk/*
 .git
 .gitignore
