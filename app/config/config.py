@@ -2,8 +2,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import URL
 
-load_dotenv()
-
+load_dotenv(override=True)
 
 # Check if DB_URL exists
 if "DB_URL" in os.environ:
