@@ -1,34 +1,36 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import Response
-from sqlalchemy import text
+import json
 
-from app.core.request import TileCoords
-from app.db.connect import create_db_session, safe_execute_query
-from app.services.tile_service import get_bbox_from_tile_coords
+from fastapi import APIRouter
+from sqlalchemy import func
+
+from app.config.config import DEFAULT_MAX_ROW_LIMIT
+from app.db.connect import Session
+from app.db.models import PredictionVector
+
 router = APIRouter()
 
 
-@router.get("/{datetime}/tile/{z}/{x}/{y}.png", tags=["Tiles"],
-            response_class=Response,
-            responses={200: {"content": {"image/png": {}}}})
-def get_tile(datetime: str, tile_coords: TileCoords = Depends()):
-    aoi_bbox = get_bbox_from_tile_coords(tile_coords)
-    # todo: retrive tile data from db
-    # tile = get_tile_data(tile_coords, datetime)
-    # todo render tile in a png image
-    # image_content = render_tile(tile)
-    #
-    # return Response(
-    #     status_code=200,
-    #     content=image_content,
-    #     media_type="image/png"
-    # )
-    return {"message": "Hello World"}
+@router.get("/predictions")
+def get_predictions():
+    session = Session()
+    query = session.query(
+        func.ST_AsGeoJSON(PredictionVector.geometry),
+        PredictionVector.pixel_value,
+    ).limit(DEFAULT_MAX_ROW_LIMIT)
+    results = query.all()
 
-@router.get("/test")        
-def get_test():
-    
-    db_session = create_db_session()
-    testData= safe_execute_query(db_session, text("SELECT * FROM prediction_rasters"))
-    db_session.close()
-    return {"test": testData }
+    results_list = [
+        {
+            "type": "Feature",
+            "properties": {"pixelValue": row[1]},
+            # Ensuring row[0] is treated as a JSON string
+            "geometry": json.loads(row[0]),
+        }
+        for row in results
+    ]
+
+    results_dict = {"type": "FeatureCollection", "features": results_list}
+
+    results_json = json.dumps(results_dict, ensure_ascii=False)
+    session.close()
+    return results_json
