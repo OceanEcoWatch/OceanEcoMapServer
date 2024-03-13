@@ -11,12 +11,15 @@ router = APIRouter()
 
 
 @router.get("/predictions")
-def get_predictions():
+def get_predictions(limit: int):
+    limit = min(
+        limit, DEFAULT_MAX_ROW_LIMIT
+    )  # DEFAULT_MAX_ROW_LIMIT will always be the max limit
     session = Session()
     query = session.query(
         func.ST_AsGeoJSON(PredictionVector.geometry),
         PredictionVector.pixel_value,
-    ).limit(DEFAULT_MAX_ROW_LIMIT)
+    ).limit(limit)
     results = query.all()
 
     results_list = [
