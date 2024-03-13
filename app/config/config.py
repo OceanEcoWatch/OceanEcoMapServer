@@ -1,9 +1,9 @@
 import os
+
 from dotenv import load_dotenv
-from sqlalchemy import URL
+from sqlalchemy import URL  # type: ignore
 
-load_dotenv()
-
+load_dotenv(override=True)
 
 # Check if DB_URL exists
 if "DB_URL" in os.environ:
@@ -20,4 +20,7 @@ else:
         username=DB_USER,
         password=DB_PW,  # plain (unescaped) text
         host=DB_HOST,
-        database=DB_NAME)
+        database=DB_NAME,
+    )
+
+DEFAULT_MAX_ROW_LIMIT = 1000
