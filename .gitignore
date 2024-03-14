@@ -10,4 +10,4 @@ __pycache__
 !.elasticbeanstalk/*.global.yml
 
 # Vscode
-.code-workspace
+OceanEcoMapServer.code-workspace
