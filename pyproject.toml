@@ -23,6 +23,8 @@ aws-cdk-lib = "^2.101.1"
 sqlalchemy-stubs = "^0.4"
 httpx = "^0.27.0"
 pytest = "^8.1.1"
+sentinelhub = "^3.10.1"
+geojson-pydantic = "^1.0.2"
 
 
 [build-system]
