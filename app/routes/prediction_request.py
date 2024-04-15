@@ -38,19 +38,21 @@ router = APIRouter()
 
 
 @router.post("/prediction-request")
-async def create_geojson_feature(feature: GeoJSONFeature):
+async def create_geojson_feature():
+    # async def create_geojson_feature(feature: GeoJSONFeature):
     query_sh_catalog(
         {
             "type": "Polygon",
             "coordinates": [
                 [
-                    [120.70949463527762, 14.676320557142418],
-                    [120.70949463527762, 14.600147444878914],
-                    [120.79856132280622, 14.600147444878914],
-                    [120.79856132280622, 14.676320557142418],
-                    [120.70949463527762, 14.676320557142418],
+                    [35.51974484135931, -21.512226110929063],
+                    [35.51974484135931, -36.62666431275848],
+                    [54.49896668354583, -36.62666431275848],
+                    [54.49896668354583, -21.512226110929063],
+                    [35.51974484135931, -21.512226110929063],
                 ]
             ],
-        }
+        },
+        "2024-03-18T00:00:00Z/2024-03-20T23:59:59Z",
     )
     return {"message": "GeoJSON feature received", "feature": "NONE"}
