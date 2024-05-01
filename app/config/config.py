@@ -5,6 +5,12 @@ from sqlalchemy import URL  # type: ignore
 
 load_dotenv(override=True)
 
+SENTINAL_HUB = {
+    "INSTANCE_ID": os.environ["SH_INSTANCE_ID"],
+    "CLIENT_ID": os.environ["SH_CLIENT_ID"],
+    "CLIENT_SECRET": os.environ["SH_CLIENT_SECRET"],
+}
+
 # Check if DB_URL exists
 if "DB_URL" in os.environ:
     DATABASE_URL = os.environ["DB_URL"]
