@@ -1,9 +1,15 @@
 import os
+
 from dotenv import load_dotenv
-from sqlalchemy import URL
+from sqlalchemy import URL  # type: ignore
 
-load_dotenv()
+load_dotenv(override=True)
 
+SENTINAL_HUB = {
+    "INSTANCE_ID": os.environ["SH_INSTANCE_ID"],
+    "CLIENT_ID": os.environ["SH_CLIENT_ID"],
+    "CLIENT_SECRET": os.environ["SH_CLIENT_SECRET"],
+}
 
 # Check if DB_URL exists
 if "DB_URL" in os.environ:
@@ -20,4 +26,7 @@ else:
         username=DB_USER,
         password=DB_PW,  # plain (unescaped) text
         host=DB_HOST,
-        database=DB_NAME)
+        database=DB_NAME,
+    )
+
+DEFAULT_MAX_ROW_LIMIT = 1000
