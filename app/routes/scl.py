@@ -35,8 +35,13 @@ def scl(
         default=None, title="Classification values to filter by"
     ),
     image_id: int = Query(default=None, title="Image ID to filter by"),
+    geometry: str = Query(
+        default=None,
+        title="GeoJSON geometry to filter by",
+    ),
 ):
     session = Session()
+
     if classification:
         for value in classification:
             if not SCL.check(value):
@@ -69,6 +74,14 @@ def scl(
         query = query.filter(SceneClassificationVector.pixel_value.in_(classification))
     if image_id:
         query = query.filter(SceneClassificationVector.image_id == image_id)
+
+    if geometry:
+        query = query.filter(
+            func.ST_Intersects(
+                SceneClassificationVector.geometry,
+                func.ST_GeomFromGeoJSON(geometry),
+            )
+        )
 
     results = query.all()
     results_list = [
