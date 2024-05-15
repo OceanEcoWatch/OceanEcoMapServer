@@ -44,17 +44,17 @@ def scl(
                     status_code=400, detail=f"Invalid classification value: {value}"
                 )
     if image_id:
-        image = session.query(Image).filter_by(id=image_id).first()
-        if not image:
+        image_in_db = session.query(Image).filter_by(id=image_id).first()
+        if not image_in_db:
             raise HTTPException(
                 status_code=404, detail=f"No image found for ID: {image_id}"
             )
-        image = (
+        image_rel = (
             session.query(SceneClassificationVector)
             .filter_by(image_id=image_id)
             .first()
         )
-        if not image:
+        if not image_rel:
             raise HTTPException(
                 status_code=404, detail=f"No SCL data found for image ID: {image_id}"
             )
@@ -76,7 +76,7 @@ def scl(
             "type": "Feature",
             "geometry": json.loads(result[0]),
             "properties": {
-                "classification": SCL(result[1]).name,
+                "classification": result[1],
                 "image_id": result[2],
             },
         }
