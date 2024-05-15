@@ -1,6 +1,8 @@
 import geopandas as gpd
+import pyproj
 from shapely.geometry import Polygon, box
-
+from pyproj.database import query_utm_crs_info
+from pyproj.aoi import AreaOfInterest
 from app.types.helpers import BoundingBox
 
 
@@ -33,7 +35,7 @@ def is_covering_bbox(inner_bbox_list, outer_bbox_list) -> bool:
 # is_covering_bbox([1, 1, 3, 3], [1, 0, 4, 4])
 
 
-def intersecting_polygones(base_polygon, intersec_polygon):
+def intersecting_polygons(base_polygon, intersec_polygon):
     base_polygon = Polygon(base_polygon)
     intersec_polygon = Polygon(intersec_polygon)
     return base_polygon.intersects(intersec_polygon)
@@ -75,9 +77,74 @@ def parse_bbox(bbox_str: str) -> BoundingBox:
                 "Bounding box string must contain exactly four comma-separated values."
             )
 
-        min_x, min_y, max_x, max_y = map(float, parts)  # Converts each part to float
+        min_x, min_y, max_x, max_y = map(
+            float, parts)  # Converts each part to float
 
         return BoundingBox(min_x, min_y, max_x, max_y)
     except ValueError as e:
         raise ValueError(f"Error parsing bounding box: {str(e)}")
         raise ValueError(f"Error parsing bounding box: {str(e)}")
+
+
+def determine_utm_epsg(  # thanks to marc for this function :D
+    source_epsg: int,
+    west_lon: float,
+    south_lat: float,
+    east_lon: float,
+    north_lat: float,
+    contains: bool = True,
+) -> int:
+    """
+    Determine the UTM EPSG code for a given epsg code and bounding box
+
+    :param source_epsg: The source EPSG code
+    :param west_lon: The western longitude
+    :param south_lat: The southern latitude
+    :param east_lon: The eastern longitude
+    :param north_lat: The northern latitude
+    :param contains: If True, the UTM CRS must contain the bounding box,
+        if False, the UTM CRS must intersect the bounding box.
+
+    :return: The UTM EPSG code
+
+    :raises ValueError: If no UTM CRS is found for the epsg and bbox
+    """
+    datum_name = pyproj.CRS.from_epsg(source_epsg).to_dict()["datum"]
+
+    utm_crs_info = query_utm_crs_info(
+        datum_name=datum_name,
+        area_of_interest=AreaOfInterest(
+            west_lon, south_lat, east_lon, north_lat),
+        contains=contains,
+    )
+
+    if not utm_crs_info:
+        raise ValueError(
+            f"No UTM CRS found for the datum {datum_name} and bbox")
+
+    return int(utm_crs_info[0].code)
+
+
+def is_utm_epsg(epsg: int) -> bool:
+    """Check if an EPSG code is a UTM code."""
+    return pyproj.CRS.from_epsg(epsg).to_dict()["proj"] == "utm"
+
+
+def get_bounding_box(polygon_coords, epsgCode: int = 4326):
+    """
+    Given a list of polygon coordinates, return the bounding box that perfectly surrounds the polygon.
+
+    :param polygon_coords: List of tuples representing the coordinates of the polygon.
+    :return: Tuple containing the bounding box in the format (minx, miny, maxx, maxy).
+    """
+    # Create the polygon from the provided coordinates
+    polygon = Polygon(polygon_coords)
+
+    # Create a GeoDataFrame
+    gdf = gpd.GeoDataFrame(
+        index=[0], crs=f"EPSG:{str(epsgCode)}", geometry=[polygon])
+
+    # Get the bounding box
+    bbox = gdf.total_bounds
+
+    return bbox
