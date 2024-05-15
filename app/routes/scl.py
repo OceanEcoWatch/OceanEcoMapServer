@@ -1,15 +1,16 @@
+import enum
 import json
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func
 
 from app.db.connect import Session
-from app.db.models import SceneClassificationVector
-from fas
+from app.db.models import Image, SceneClassificationVector
+
 router = APIRouter()
 
 
-class SCL(enum.Enum):
+class SCL(enum.IntEnum):
     NO_DATA = 0
     SATURATED = 1
     SHADOWS = 2
@@ -29,30 +30,55 @@ class SCL(enum.Enum):
 
 
 @router.get("/scl")
-def get_scl(
+def scl(
     classification: list[int] = Query(
         default=None, title="Classification values to filter by"
     ),
+    image_id: int = Query(default=None, title="Image ID to filter by"),
 ):
+    session = Session()
     if classification:
         for value in classification:
             if not SCL.check(value):
                 raise HTTPException(
                     status_code=400, detail=f"Invalid classification value: {value}"
                 )
+    if image_id:
+        image = session.query(Image).filter_by(id=image_id).first()
+        if not image:
+            raise HTTPException(
+                status_code=404, detail=f"No image found for ID: {image_id}"
+            )
+        image = (
+            session.query(SceneClassificationVector)
+            .filter_by(image_id=image_id)
+            .first()
+        )
+        if not image:
+            raise HTTPException(
+                status_code=404, detail=f"No SCL data found for image ID: {image_id}"
+            )
 
-    session = Session()
     query = session.query(
         func.ST_AsGeoJSON(SceneClassificationVector.geometry),
         SceneClassificationVector.pixel_value,
-    ).filter(SceneClassificationVector.pixel_value == classification)
-    results = query.all()
+        SceneClassificationVector.image_id,
+    )
 
+    if classification:
+        query = query.filter(SceneClassificationVector.pixel_value.in_(classification))
+    if image_id:
+        query = query.filter(SceneClassificationVector.image_id == image_id)
+
+    results = query.all()
     results_list = [
         {
             "type": "Feature",
             "geometry": json.loads(result[0]),
-            "properties": {"pixel_value": result[1]},
+            "properties": {
+                "classification": SCL(result[1]).name,
+                "image_id": result[2],
+            },
         }
         for result in results
     ]
