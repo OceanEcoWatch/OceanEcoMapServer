@@ -1,17 +1,19 @@
 import json
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import func
+import geopandas as gpd
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.db.connect import Session
-from app.db.models import AOI
-from app.services.utils import parse_bbox
+from app.db.models import AOI, Job
+from app.services.utils import determine_utm_epsg, parse_bbox
 
 router = APIRouter()
 
 
-@router.get("/aoi-centers")
+@router.get("/aoi-centers", tags=["AOI"])
 def get_aoi_centers_by_bbox(
     bbox: str | None = Query(
         WORLD_WIDE_BBOX["query_str"],
@@ -23,11 +25,14 @@ def get_aoi_centers_by_bbox(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Bad Request. {e}")
 
-    # Query for geometries within the bounding box
     session = Session()
+
+    # Query for geometries within the bounding box
     query = session.query(
         AOI.id,
-        func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)),
+        AOI.name,
+        func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
+        func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
     ).filter(
         func.ST_Intersects(
             AOI.geometry,
@@ -39,30 +44,57 @@ def get_aoi_centers_by_bbox(
                 STANDARD_CRS["SRID"],
             ),
         ),
-        AOI.is_deleted == False,  # noqa <E712>
+        AOI.is_deleted == False  # noqa <E712>
     )
+
     results = query.all()
     session.close()
 
-    results_list = [
-        {
+    results_list = []
+    for row in results:
+        # Convert WKT to GeoSeries and create GeoDataFrame
+        polygon = gpd.GeoSeries.from_wkt([row.aoi_as_wkt]).iloc[0]
+        gdf = gpd.GeoDataFrame(index=[0], crs="EPSG:4326", geometry=[polygon])
+
+        # Get bounding box
+        bbox = gdf.total_bounds
+        west_lon, south_lat, east_lon, north_lat = bbox[0], bbox[1], bbox[2], bbox[3]
+
+        # Determine local EPSG
+        local_epsg = determine_utm_epsg(
+            source_epsg=4326,
+            west_lon=west_lon,
+            south_lat=south_lat,
+            east_lon=east_lon,
+            north_lat=north_lat,
+            contains=True
+        )
+        # Convert to local CRS
+        localized_gdf = gdf.to_crs(epsg=local_epsg)
+        localized_polygon = localized_gdf.iloc[0].geometry
+
+        # Calculate area in km^2
+        area_km2 = localized_polygon.area / 1e6  # Convert to km^2
+
+        results_list.append({
             "type": "Feature",
             "properties": {
-                "id": row[0],
+                "name": row.name,
+                "id": row.id,
+                "area_km2": area_km2,
+                "polygon": row.aoi_as_wkt,
             },
             "geometry": json.loads(
-                row[1]
+                row.geometry
             ),  # Ensuring row[3] is treated as a JSON string
-        }
-        for row in results
-    ]
+        })
 
     results_dict = {"type": "FeatureCollection", "features": results_list}
     results_json = json.dumps(results_dict, ensure_ascii=False)
-    return results_json
+    return JSONResponse(content=results_json)
 
 
-@router.get("/aoi")
+@ router.get("/aoi", tags=["AOI"])
 def get_aoi_by_bbox(
     bbox: str | None = Query(
         WORLD_WIDE_BBOX["query_str"],
