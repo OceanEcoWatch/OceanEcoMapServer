@@ -84,6 +84,10 @@ def scl(
         )
 
     results = query.all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No SCL data found for query")
+
     results_list = [
         {
             "type": "Feature",
