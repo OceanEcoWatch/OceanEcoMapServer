@@ -25,7 +25,7 @@ class SCL(enum.IntEnum):
     SNOW_ICE = 11
 
     @classmethod
-    def check(cls, value):
+    def is_valid(cls, value):
         return value in cls.__members__.values()
 
 
@@ -44,7 +44,7 @@ def scl(
 
     if classification:
         for value in classification:
-            if not SCL.check(value):
+            if not SCL.is_valid(value):
                 raise HTTPException(
                     status_code=400, detail=f"Invalid classification value: {value}"
                 )
