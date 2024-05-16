@@ -83,7 +83,7 @@ def get_aoi_centers_by_bbox(
                 "name": row.name,
                 "id": row.id,
                 "area_km2": area_km2,
-                "polygon": row.aoi_geo,
+                "polygon": json.loads(row.aoi_geo),
             },
             "geometry": json.loads(
                 row.geometry
