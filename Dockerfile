@@ -22,11 +22,7 @@ COPY ./pyproject.toml /code/./pyproject.toml
 RUN poetry install
 
 # Adding environment variables
-ENV DB_USER=root
-ENV DB_PW=postgres
-ENV DB_NAME=postgres
-ENV DB_HOST=localhost
-ENV DB_PORT=5432
+ENV AWS_DEFAULT_REGION eu-central-1
 
 COPY ./app /code/app
 
