@@ -11,9 +11,9 @@ load_dotenv(override=True)
 if "DEBUG" in os.environ:
 
     SENTINAL_HUB = {
+        "CLIENT_SECRET": os.environ["SH_CLIENT_SECRET"],
         "CLIENT_ID": os.environ["SH_CLIENT_ID"],
         "INSTANCE_ID": os.environ["SH_INSTANCE_ID"],
-        "CLIENT_SECRET": os.environ["SH_CLIENT_SECRET"],
     }
 
     # Check if DB_URL exists
