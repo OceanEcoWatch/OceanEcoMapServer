@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -6,11 +7,7 @@ from sqlalchemy import func
 
 from app.config.config import DEFAULT_MAX_ROW_LIMIT
 from app.db.connect import Session
-from app.db.models import AOI, Job, PredictionVector, Image, PredictionRaster
-
-from datetime import date as DateType, timedelta, timezone
-from datetime import datetime
-
+from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
 
 router = APIRouter()
 
@@ -20,16 +17,20 @@ def get_aoi_images_grouped_by_day(
     aoiId: int = Query(..., description="Id of the AOI in question"),
 ):
     session = Session()
-    query = session.query(
-        Image.id,
-        Image.timestamp,
-        func.ST_AsGeoJSON(Image.bbox).label("geometry"),
-    ).join(
-        Job, Image.job_id == Job.id,
-    ).filter(
-        Job.aoi_id == aoiId,
-    ).order_by(
-        Image.timestamp
+    query = (
+        session.query(
+            Image.id,
+            Image.timestamp,
+            func.ST_AsGeoJSON(Image.bbox).label("geometry"),
+        )
+        .join(
+            Job,
+            Image.job_id == Job.id,
+        )
+        .filter(
+            Job.aoi_id == aoiId,
+        )
+        .order_by(Image.timestamp)
     )
 
     results = query.all()
@@ -51,24 +52,25 @@ def get_aoi_images_grouped_by_day(
 
 
 def get_start_of_day_unix_timestamp(date_time):
-
     utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(
-        utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
 @router.get("/predictions-by-day-and-aoi", tags=["Predictions"])
 def get_predictions_by_day(
-    day: int = Query(...,
-                     description="Unix Timestamp of the day in question. The timestamp will set the beginning of a 24hr time range. The endpoint will return all predictions for the area of the aoi in this timeframe.",
-                     ),
-    aoi_id: int = Query(...,
-                        description="Id of the AOI in question for example: 1",
-                        ),
-    accuracy_limit: float = Query(...,
-                                  description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50",
-                                  ),
+    day: int = Query(
+        ...,
+        description="Unix Timestamp of the day in question. The timestamp will set the beginning of a 24hr time range. The endpoint will return all predictions for the area of the aoi in this timeframe.",
+    ),
+    aoi_id: int = Query(
+        ...,
+        description="Id of the AOI in question for example: 1",
+    ),
+    accuracy_limit: float = Query(
+        ...,
+        description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50",
+    ),
 ):
     session = Session()
     aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
@@ -79,25 +81,27 @@ def get_predictions_by_day(
     startDate = datetime.fromtimestamp(day)
     endDate = startDate + timedelta(days=1)
 
-    query = session.query(
-        AOI.id,
-        Image.timestamp,
-        Image.id,
-        func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-        PredictionVector.pixel_value,
-    ).join(
-        Job, Job.aoi_id == AOI.id
-    ).join(
-        Image, Image.job_id == Job.id
-    ).join(
-        PredictionRaster, PredictionRaster.image_id == Image.id
-    ).join(
-        PredictionVector, PredictionVector.prediction_raster_id == PredictionRaster.id
-    ).filter(
-        func.ST_Intersects(aoi.geometry, PredictionVector.geometry),
-        Image.timestamp >= startDate,
-        Image.timestamp < endDate,
-        PredictionVector.pixel_value >= percent_to_accuracy(accuracy_limit),
+    query = (
+        session.query(
+            AOI.id,
+            Image.timestamp,
+            Image.id,
+            func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+            PredictionVector.pixel_value,
+        )
+        .join(Job, Job.aoi_id == AOI.id)
+        .join(Image, Image.job_id == Job.id)
+        .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+        .join(
+            PredictionVector,
+            PredictionVector.prediction_raster_id == PredictionRaster.id,
+        )
+        .filter(
+            func.ST_Intersects(aoi.geometry, PredictionVector.geometry),
+            Image.timestamp >= startDate,
+            Image.timestamp < endDate,
+            PredictionVector.pixel_value >= percent_to_accuracy(accuracy_limit),
+        )
     )
     results = query.all()
     results_list = [
@@ -105,7 +109,7 @@ def get_predictions_by_day(
             "type": "Feature",
             "properties": {
                 "pixelValue": accuracy_limit_to_percent(row.pixel_value),
-                "image.timestamp": row.timestamp.timestamp(),
+                "timestamp": row.timestamp.timestamp(),
             },
             # Ensuring row[0] is treated as a JSON string
             "geometry": json.loads(row.geometry),
@@ -119,11 +123,11 @@ def get_predictions_by_day(
 
 
 def percent_to_accuracy(percent: int):
-    return 255/100 * percent
+    return 255 / 100 * percent
 
 
 def accuracy_limit_to_percent(accuracy: int):
-    return accuracy/255 * 100
+    return accuracy / 255 * 100
 
 
 @router.get("/predictions")
