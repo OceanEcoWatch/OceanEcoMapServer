@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/scl")
 def scl(
-    classification: list[int] = Query(
+    classification: list[SCL] = Query(
         default=None, title="Classification values to filter by"
     ),
     image_id: int = Query(default=None, title="Image ID to filter by"),
@@ -23,12 +23,6 @@ def scl(
 ):
     session = Session()
 
-    if classification:
-        for value in classification:
-            if not SCL.is_valid(value):
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid classification value: {value}"
-                )
     if image_id:
         image_in_db = session.query(Image).filter_by(id=image_id).first()
         if not image_in_db:
@@ -74,7 +68,9 @@ def scl(
             "type": "Feature",
             "geometry": json.loads(result[0]),
             "properties": {
-                "classification": result[1],
+                "classification": SCL(
+                    result[1]
+                ).name,  # Converting pixel value to enum name
                 "image_id": result[2],
             },
         }
