@@ -8,6 +8,7 @@ app = FastAPI()
 
 origins = ["*"]
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+print("CORS Middleware active for origins: ", origins)
 
 app.include_router(predictions.router)
 app.include_router(prediction_request.router)
