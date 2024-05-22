@@ -3,8 +3,8 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - $(aws ecr get-login --no-include-email --region <region>)
-      - REPOSITORY_URI=<your_ecr_repository_uri>
+      - $(aws ecr get-login --no-include-email --region eu-central-1)
+      - REPOSITORY_URI=768912473174.dkr.ecr.eu-central-1.amazonaws.com/backend_v3
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_URI="$REPOSITORY_URI:$IMAGE_TAG"
   build:
@@ -15,7 +15,7 @@ phases:
     commands:
       - docker push $IMAGE_URI
       - echo "Image pushed to ECR with tag $IMAGE_TAG"
-      - printf '{"AWSEBDockerrunVersion": "1", "Image": {"Name": "%s", "Update": "true"}}' $IMAGE_URI > Dockerrun.aws.json
+      # - printf '{"AWSEBDockerrunVersion": "1", "Image": {"Name": "%s", "Update": "true"}}' $IMAGE_URI > Dockerrun.aws.json
 
 artifacts:
   files:
