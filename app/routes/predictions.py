@@ -67,59 +67,66 @@ def get_predictions_by_day(
         ...,
         description="Id of the AOI in question for example: 1",
     ),
-    accuracy_limit: float = Query(
+    accuracy_limit: int = Query(
         ...,
         description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50",
     ),
 ):
     session = Session()
-    aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
-    if not aoi:
+    try:
+        aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
+        if not aoi:
+            session.close()
+            raise HTTPException(status_code=404, detail="AOI not found")
+
+        startDate = datetime.fromtimestamp(day)
+        endDate = startDate + timedelta(days=1)
+        max_pixel_value = percent_to_accuracy(accuracy_limit)
+
+        query = (
+            session.query(
+                AOI.id,
+                Image.timestamp,
+                Image.id,
+                func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                PredictionVector.pixel_value,
+            )
+            .join(Job, Job.aoi_id == AOI.id)
+            .join(Image, Image.job_id == Job.id)
+            .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+            .join(
+                PredictionVector,
+                PredictionVector.prediction_raster_id == PredictionRaster.id,
+            )
+            .filter(
+                Image.timestamp >= startDate,
+                Image.timestamp < endDate,
+                func.ST_Intersects(
+                    PredictionVector.geometry,
+                    AOI.geometry,
+                ),
+                PredictionVector.pixel_value >= int(max_pixel_value),
+            )
+        )
+
+        results = query.all()
+        results_list = [
+            {
+                "type": "Feature",
+                "properties": {
+                    "pixelValue": accuracy_limit_to_percent(row.pixel_value),
+                    "timestamp": row.timestamp.timestamp(),
+                },
+                # Ensuring row[0] is treated as a JSON string
+                "geometry": json.loads(row.geometry),
+            }
+            for row in results
+        ]
+
+        results_dict = {"type": "FeatureCollection", "features": results_list}
+        return JSONResponse(content=results_dict)
+    finally:
         session.close()
-        raise HTTPException(status_code=404, detail="AOI not found")
-
-    startDate = datetime.fromtimestamp(day)
-    endDate = startDate + timedelta(days=1)
-
-    query = (
-        session.query(
-            AOI.id,
-            Image.timestamp,
-            Image.id,
-            func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-            PredictionVector.pixel_value,
-        )
-        .join(Job, Job.aoi_id == AOI.id)
-        .join(Image, Image.job_id == Job.id)
-        .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-        .join(
-            PredictionVector,
-            PredictionVector.prediction_raster_id == PredictionRaster.id,
-        )
-        .filter(
-            func.ST_Intersects(aoi.geometry, PredictionVector.geometry),
-            Image.timestamp >= startDate,
-            Image.timestamp < endDate,
-            PredictionVector.pixel_value >= percent_to_accuracy(accuracy_limit),
-        )
-    )
-    results = query.all()
-    results_list = [
-        {
-            "type": "Feature",
-            "properties": {
-                "pixelValue": accuracy_limit_to_percent(row.pixel_value),
-                "timestamp": row.timestamp.timestamp(),
-            },
-            # Ensuring row[0] is treated as a JSON string
-            "geometry": json.loads(row.geometry),
-        }
-        for row in results
-    ]
-
-    results_dict = {"type": "FeatureCollection", "features": results_list}
-
-    return JSONResponse(content=results_dict)
 
 
 def percent_to_accuracy(percent: int):
