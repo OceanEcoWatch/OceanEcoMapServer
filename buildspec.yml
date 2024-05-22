@@ -3,7 +3,7 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - $(aws ecr get-login --no-include-email --region eu-central-1)
+      - aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 768912473174.dkr.ecr.eu-central-1.amazonaws.com
       - REPOSITORY_URI=768912473174.dkr.ecr.eu-central-1.amazonaws.com/backend_v3
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_URI="$REPOSITORY_URI:$IMAGE_TAG"
