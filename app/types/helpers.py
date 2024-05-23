@@ -1,3 +1,4 @@
+import datetime
 import enum
 from typing import NamedTuple
 
@@ -43,8 +44,8 @@ class BoundingBox(NamedTuple):
 
 
 class TimeRange(NamedTuple):
-    start: str
-    end: str
+    start: datetime.datetime
+    end: datetime.datetime
 
 
 class HeightWidth(NamedTuple):

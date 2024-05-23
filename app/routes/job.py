@@ -1,3 +1,4 @@
+import datetime
 import json
 
 from fastapi import APIRouter, Query
@@ -105,3 +106,49 @@ def get_job_by_aoi(
     print(len(response["jobs"][0]["images"]))
     print(len(response["jobs"][0]["images"][0]["predictions"]))
     return json.dumps(response, ensure_ascii=False)
+
+
+@router.post("/jobs")
+def create_job(
+    start_date: datetime.datetime = Query(
+        description="The start date of the job",
+    ),
+    end_date: datetime.datetime = Query(
+        description="The end date of the job",
+    ),
+    model_id: int = Query(
+        description="The id of the model",
+    ),
+    aoi_id: int = Query(
+        description="The id of the AOI",
+    ),
+    maxcc: float = Query(
+        description="The maximum cloud coverage",
+    ),
+):
+    session = Session()
+    try:
+        job = Job(
+            status=JobStatus.PENDING,
+            start_date=start_date,
+            end_date=end_date,
+            model_id=model_id,
+            aoi_id=aoi_id,
+            maxcc=maxcc,
+        )
+        session.add(job)
+        session.commit()
+        json_job = {
+            "job_id": job.id,
+            "status": str(job.status.value),
+            "created_at": job.created_at.isoformat(),
+            "start_date": job.start_date.isoformat(),
+            "end_date": job.end_date.isoformat(),
+            "maxcc": job.maxcc,
+            "model_id": job.model_id,
+            "images": [],
+        }
+    finally:
+        session.close()
+
+    return json.dumps(json_job, ensure_ascii=False)

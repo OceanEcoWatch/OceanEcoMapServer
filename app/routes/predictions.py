@@ -76,39 +76,41 @@ def get_predictions_by_day(
     try:
         aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
         if not aoi:
-            session.close()
             raise HTTPException(status_code=404, detail="AOI not found")
 
         startDate = datetime.fromtimestamp(day)
         endDate = startDate + timedelta(days=1)
-        max_pixel_value = percent_to_accuracy(accuracy_limit)
-
+        max_pixel_value = round(percent_to_accuracy(accuracy_limit))
+        print(startDate, endDate, max_pixel_value)
         query = (
-            session.query(
-                AOI.id,
-                Image.timestamp,
-                Image.id,
-                func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-                PredictionVector.pixel_value,
+            (
+                session.query(
+                    AOI.id,
+                    Image.timestamp,
+                    Image.id,
+                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                    PredictionVector.pixel_value,
+                )
+                .join(Job, Job.aoi_id == AOI.id)
+                .join(Image, Image.job_id == Job.id)
+                .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+                .join(
+                    PredictionVector,
+                    PredictionVector.prediction_raster_id == PredictionRaster.id,
+                )
+                .filter(
+                    Image.timestamp >= startDate,
+                    Image.timestamp < endDate,
+                    func.ST_Intersects(
+                        PredictionVector.geometry,
+                        AOI.geometry,
+                    ),
+                    PredictionVector.pixel_value >= max_pixel_value,
+                )
             )
-            .join(Job, Job.aoi_id == AOI.id)
-            .join(Image, Image.job_id == Job.id)
-            .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-            .join(
-                PredictionVector,
-                PredictionVector.prediction_raster_id == PredictionRaster.id,
-            )
-            .filter(
-                Image.timestamp >= startDate,
-                Image.timestamp < endDate,
-                func.ST_Intersects(
-                    PredictionVector.geometry,
-                    AOI.geometry,
-                ),
-                PredictionVector.pixel_value >= int(max_pixel_value),
-            )
+            .order_by(Image.timestamp)
+            .limit(DEFAULT_MAX_ROW_LIMIT)
         )
-
         results = query.all()
         results_list = [
             {

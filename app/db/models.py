@@ -85,7 +85,9 @@ class Job(Base):
     )
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.now)
     is_deleted = Column(Boolean, nullable=False, default=False)
-
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    maxcc = Column(Float, nullable=False)
     aoi_id = Column(Integer, ForeignKey("aois.id"), nullable=False)
     aoi = relationship("AOI", backref="jobs")
     model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
@@ -96,6 +98,9 @@ class Job(Base):
         status: JobStatus,
         aoi_id: int,
         model_id: int,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+        maxcc: float,
         is_deleted: bool = False,
         created_at: datetime.datetime = datetime.datetime.now(),
     ):
@@ -103,6 +108,9 @@ class Job(Base):
         self.created_at = created_at
         self.aoi_id = aoi_id
         self.model_id = model_id
+        self.start_date = start_date
+        self.end_date = end_date
+        self.maxcc = maxcc
         self.is_deleted = is_deleted
 
 
@@ -118,6 +126,7 @@ class Image(Base):
         Enum(*IMAGE_DTYPES, name="image_dtype"),
         nullable=False,
     )
+    crs = Column(Integer, nullable=False)
     resolution = Column(Float, nullable=False)
     image_width = Column(Integer, nullable=False)
     image_height = Column(Integer, nullable=False)
@@ -143,6 +152,7 @@ class Image(Base):
         image_url: str,
         timestamp: datetime.datetime,
         dtype: str,
+        crs: int,
         resolution: float,
         image_width: int,
         image_height: int,
@@ -155,6 +165,7 @@ class Image(Base):
         self.image_url = image_url
         self.timestamp = timestamp
         self.dtype = dtype
+        self.crs = crs
         self.resolution = resolution
         self.image_width = image_width
         self.image_height = image_height
@@ -206,7 +217,7 @@ class PredictionVector(Base):
 
     id = Column(Integer, primary_key=True)
     pixel_value = Column(Integer, nullable=False)
-    geometry = Column(Geometry(geometry_type="Point", srid=4326), nullable=False)
+    geometry = Column(Geometry(geometry_type="POINT", srid=4326), nullable=False)
 
     prediction_raster_id = Column(
         Integer, ForeignKey("prediction_rasters.id"), nullable=False
