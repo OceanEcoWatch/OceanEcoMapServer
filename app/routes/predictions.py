@@ -141,7 +141,7 @@ def accuracy_limit_to_percent(accuracy: int):
     return accuracy / 255 * 100
 
 
-@router.get("/predictions")
+@router.get("/predictions", tags=["Predictions"])
 def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     limit = min(
         limit, DEFAULT_MAX_ROW_LIMIT
@@ -170,7 +170,7 @@ def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     return results_json
 
 
-@router.post("/predictions")
+@router.post("/predictions", tags=["Predictions"])
 def run_prediction_job(
     job_id: int = Query(
         ...,

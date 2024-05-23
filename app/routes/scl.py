@@ -10,7 +10,7 @@ from app.types.helpers import SCL
 router = APIRouter()
 
 
-@router.get("/scl")
+@router.get("/scl", tags=["SCL"])
 def scl(
     classification: list[SCL] = Query(
         default=None, title="Classification values to filter by"
