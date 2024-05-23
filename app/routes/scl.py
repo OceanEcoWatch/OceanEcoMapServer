@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/scl", tags=["SCL"])
-def scl(
+async def scl(
     classification: list[SCL] = Query(
         default=None, title="Classification values to filter by"
     ),

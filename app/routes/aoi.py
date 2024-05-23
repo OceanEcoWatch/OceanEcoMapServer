@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/aoi-centers", tags=["AOI"])
-def get_aoi_centers_by_bbox(
+async def get_aoi_centers_by_bbox(
     bbox: str | None = Query(
         WORLD_WIDE_BBOX["query_str"],
         description="Comma-separated bounding box coordinates minx,miny,maxx,maxy  - WGS84",
@@ -98,7 +98,7 @@ def get_aoi_centers_by_bbox(
 
 
 @router.get("/aoi", tags=["AOI"])
-def get_aoi_by_bbox(
+async def get_aoi_by_bbox(
     bbox: str | None = Query(
         WORLD_WIDE_BBOX["query_str"],
         description="Comma-separated bounding box coordinates minx,miny,maxx,maxy  - WGS84",
@@ -153,7 +153,7 @@ def get_aoi_by_bbox(
 
 
 @router.post("/aoi", tags=["AOI"])
-def create_aoi(
+async def create_aoi(
     name: str = Body(
         description="Name of the AOI",
     ),
