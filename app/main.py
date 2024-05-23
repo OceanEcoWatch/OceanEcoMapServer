@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import aoi, job, model, prediction_request, predictions, scl
+from app.routes import aoi, job, model, predictions, scl
 
 app = FastAPI()
 
@@ -19,7 +19,6 @@ app.add_middleware(
 print("CORS-Middleware active for origins: ", origins)
 
 app.include_router(predictions.router)
-app.include_router(prediction_request.router)
 app.include_router(aoi.router)
 app.include_router(job.router)
 app.include_router(scl.router)

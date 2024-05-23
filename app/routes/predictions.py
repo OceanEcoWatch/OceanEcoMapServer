@@ -1,13 +1,15 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
+import requests
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 
 from app.config.config import DEFAULT_MAX_ROW_LIMIT
 from app.db.connect import Session
-from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
+from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
 
 router = APIRouter()
 
@@ -166,3 +168,61 @@ def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     results_json = json.dumps(results_dict, ensure_ascii=False)
     session.close()
     return results_json
+
+
+@router.post("/predictions")
+def run_prediction_job(
+    job_id: int = Query(
+        ...,
+        description="Id of the job to run the prediction for",
+    ),
+):
+    session = Session()
+    try:
+        job = session.query(Job).filter(Job.id == job_id).one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.status == JobStatus.COMPLETED:
+            raise HTTPException(
+                status_code=400,
+                detail="Job already completed",
+            )
+        token = os.getenv("GITHUB_TOKEN")
+        if not token:
+            raise HTTPException(
+                status_code=500,
+                detail="GITHUB_TOKEN  not set",
+            )
+        owner = "OceanEcoWatch"
+        repo = "PlasticDetectionService"
+        workflow_id = "job.yml"  # You can find this in the workflow URL
+
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"token {token}",
+        }
+
+        data = {
+            "ref": "main",  # The branch or tag to run the workflow on
+            "inputs": {
+                "job_id": str(job.id),
+            },
+        }
+
+        response = requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+            headers=headers,
+            json=data,
+        )
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error running prediction job: {err}",
+            )
+
+    finally:
+        session.close()
+
+    return {"message": "Prediction job started"}
