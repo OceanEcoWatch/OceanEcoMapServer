@@ -1,13 +1,15 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
+import requests
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 
 from app.config.config import DEFAULT_MAX_ROW_LIMIT
 from app.db.connect import Session
-from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
+from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
 
 router = APIRouter()
 
@@ -76,39 +78,41 @@ def get_predictions_by_day(
     try:
         aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
         if not aoi:
-            session.close()
             raise HTTPException(status_code=404, detail="AOI not found")
 
         startDate = datetime.fromtimestamp(day)
         endDate = startDate + timedelta(days=1)
-        max_pixel_value = percent_to_accuracy(accuracy_limit)
-
+        max_pixel_value = round(percent_to_accuracy(accuracy_limit))
+        print(startDate, endDate, max_pixel_value)
         query = (
-            session.query(
-                AOI.id,
-                Image.timestamp,
-                Image.id,
-                func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-                PredictionVector.pixel_value,
+            (
+                session.query(
+                    AOI.id,
+                    Image.timestamp,
+                    Image.id,
+                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                    PredictionVector.pixel_value,
+                )
+                .join(Job, Job.aoi_id == AOI.id)
+                .join(Image, Image.job_id == Job.id)
+                .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+                .join(
+                    PredictionVector,
+                    PredictionVector.prediction_raster_id == PredictionRaster.id,
+                )
+                .filter(
+                    Image.timestamp >= startDate,
+                    Image.timestamp < endDate,
+                    func.ST_Intersects(
+                        PredictionVector.geometry,
+                        AOI.geometry,
+                    ),
+                    PredictionVector.pixel_value >= max_pixel_value,
+                )
             )
-            .join(Job, Job.aoi_id == AOI.id)
-            .join(Image, Image.job_id == Job.id)
-            .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-            .join(
-                PredictionVector,
-                PredictionVector.prediction_raster_id == PredictionRaster.id,
-            )
-            .filter(
-                Image.timestamp >= startDate,
-                Image.timestamp < endDate,
-                func.ST_Intersects(
-                    PredictionVector.geometry,
-                    AOI.geometry,
-                ),
-                PredictionVector.pixel_value >= int(max_pixel_value),
-            )
+            .order_by(Image.timestamp)
+            .limit(DEFAULT_MAX_ROW_LIMIT)
         )
-
         results = query.all()
         results_list = [
             {
@@ -137,7 +141,7 @@ def accuracy_limit_to_percent(accuracy: int):
     return accuracy / 255 * 100
 
 
-@router.get("/predictions")
+@router.get("/predictions", tags=["Predictions"])
 def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     limit = min(
         limit, DEFAULT_MAX_ROW_LIMIT
@@ -164,3 +168,61 @@ def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     results_json = json.dumps(results_dict, ensure_ascii=False)
     session.close()
     return results_json
+
+
+@router.post("/predictions", tags=["Predictions"])
+def run_prediction_job(
+    job_id: int = Query(
+        ...,
+        description="Id of the job to run the prediction for",
+    ),
+):
+    session = Session()
+    try:
+        job = session.query(Job).filter(Job.id == job_id).one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.status == JobStatus.COMPLETED:
+            raise HTTPException(
+                status_code=400,
+                detail="Job already completed",
+            )
+        token = os.getenv("GITHUB_TOKEN")
+        if not token:
+            raise HTTPException(
+                status_code=500,
+                detail="GITHUB_TOKEN  not set",
+            )
+        owner = "OceanEcoWatch"
+        repo = "PlasticDetectionService"
+        workflow_id = "job.yml"  # You can find this in the workflow URL
+
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"token {token}",
+        }
+
+        data = {
+            "ref": "main",  # The branch or tag to run the workflow on
+            "inputs": {
+                "job_id": str(job.id),
+            },
+        }
+
+        response = requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+            headers=headers,
+            json=data,
+        )
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error running prediction job: {err}",
+            )
+
+    finally:
+        session.close()
+
+    return {"message": "Prediction job started"}

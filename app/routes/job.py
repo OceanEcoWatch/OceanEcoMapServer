@@ -1,6 +1,7 @@
+import datetime
 import json
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from sqlalchemy import func
 
 from app.db.connect import Session
@@ -16,7 +17,7 @@ from app.db.models import (
 router = APIRouter()
 
 
-@router.get("/jobs")
+@router.get("/jobs", tags=["Jobs"])
 def get_job_by_aoi(
     aoiId: int = Query(
         description="The id of the AOI",
@@ -105,3 +106,73 @@ def get_job_by_aoi(
     print(len(response["jobs"][0]["images"]))
     print(len(response["jobs"][0]["images"][0]["predictions"]))
     return json.dumps(response, ensure_ascii=False)
+
+
+@router.post("/jobs", tags=["Jobs"])
+def create_job(
+    start_date: datetime.datetime = Body(
+        description="The start date of the job",
+    ),
+    end_date: datetime.datetime = Body(
+        description="The end date of the job",
+    ),
+    model_id: int = Body(
+        description="The id of the model",
+    ),
+    aoi_id: int = Body(
+        description="The id of the AOI",
+    ),
+    maxcc: float = Body(
+        description="The maximum cloud coverage allowed in the requested images",
+        le=1.0,
+        ge=0.0,
+    ),
+):
+    session = Session()
+    try:
+        job = Job(
+            status=JobStatus.PENDING,
+            start_date=start_date,
+            end_date=end_date,
+            model_id=model_id,
+            aoi_id=aoi_id,
+            maxcc=maxcc,
+        )
+        session.add(job)
+        session.commit()
+        json_job = {
+            "job_id": job.id,
+            "status": str(job.status.value),
+            "created_at": job.created_at.isoformat(),
+            "start_date": job.start_date.isoformat(),
+            "end_date": job.end_date.isoformat(),
+            "maxcc": job.maxcc,
+            "model_id": job.model_id,
+            "images": [],
+        }
+    finally:
+        session.close()
+
+    return json.dumps(json_job, ensure_ascii=False)
+
+
+@router.get("/jobs/{job_id}", tags=["Jobs"])
+def get_job_by_id(job_id: int):
+    session = Session()
+    try:
+        job = session.query(Job).filter(Job.id == job_id).one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        return {
+            "job_id": job.id,
+            "status": str(job.status.value),
+            "created_at": job.created_at.isoformat(),
+            "start_date": job.start_date.isoformat(),
+            "end_date": job.end_date.isoformat(),
+            "maxcc": job.maxcc,
+            "model_id": job.model_id,
+        }
+
+    finally:
+        session.close()
