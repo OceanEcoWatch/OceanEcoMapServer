@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/images-by-day", tags=["AOI"])
-def get_aoi_images_grouped_by_day(
+async def get_aoi_images_grouped_by_day(
     aoiId: int = Query(..., description="Id of the AOI in question"),
 ):
     session = Session()
@@ -53,14 +53,14 @@ def get_aoi_images_grouped_by_day(
     return JSONResponse(content=days)
 
 
-def get_start_of_day_unix_timestamp(date_time):
+async def get_start_of_day_unix_timestamp(date_time):
     utc = date_time.astimezone(timezone.utc)
     start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
 @router.get("/predictions-by-day-and-aoi", tags=["Predictions"])
-def get_predictions_by_day(
+async def get_predictions_by_day(
     day: int = Query(
         ...,
         description="Unix Timestamp of the day in question. The timestamp will set the beginning of a 24hr time range. The endpoint will return all predictions for the area of the aoi in this timeframe.",
@@ -83,7 +83,7 @@ def get_predictions_by_day(
         startDate = datetime.fromtimestamp(day)
         endDate = startDate + timedelta(days=1)
         max_pixel_value = round(percent_to_accuracy(accuracy_limit))
-        print(startDate, endDate, max_pixel_value)
+
         query = (
             (
                 session.query(
@@ -142,7 +142,7 @@ def accuracy_limit_to_percent(accuracy: int):
 
 
 @router.get("/predictions", tags=["Predictions"])
-def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
+async def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
     limit = min(
         limit, DEFAULT_MAX_ROW_LIMIT
     )  # DEFAULT_MAX_ROW_LIMIT will always be the max limit
@@ -171,7 +171,7 @@ def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
 
 
 @router.post("/predictions", tags=["Predictions"])
-def run_prediction_job(
+async def run_prediction_job(
     job_id: int = Query(
         ...,
         description="Id of the job to run the prediction for",

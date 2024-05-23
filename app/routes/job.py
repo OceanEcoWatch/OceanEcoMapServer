@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/jobs", tags=["Jobs"])
-def get_job_by_aoi(
+async def get_job_by_aoi(
     aoiId: int = Query(
         description="The id of the AOI",
     ),
@@ -102,14 +102,12 @@ def get_job_by_aoi(
         last_job_id = row.Job_id
 
     response = {"jobs": jobs}
-    print(len(response["jobs"]))
-    print(len(response["jobs"][0]["images"]))
-    print(len(response["jobs"][0]["images"][0]["predictions"]))
+
     return json.dumps(response, ensure_ascii=False)
 
 
 @router.post("/jobs", tags=["Jobs"])
-def create_job(
+async def create_job(
     start_date: datetime.datetime = Body(
         description="The start date of the job",
     ),
@@ -157,7 +155,7 @@ def create_job(
 
 
 @router.get("/jobs/{job_id}", tags=["Jobs"])
-def get_job_by_id(job_id: int):
+async def get_job_by_id(job_id: int):
     session = Session()
     try:
         job = session.query(Job).filter(Job.id == job_id).one_or_none()

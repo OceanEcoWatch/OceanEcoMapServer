@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/model", tags=["Model"])
-def get_model(
+async def get_model(
     model_id: str | None = Query(None, description="Model ID"),
     model_url: str | None = Query(None, description="Model URL"),
     version: int | None = Query(None, description="Model version"),
@@ -40,7 +40,7 @@ def get_model(
 
 
 @router.post("/model", tags=["Model"])
-def post_model(
+async def post_model(
     model_id: str = Body(..., description="Model ID"),
     model_url: str = Body(..., description="Model URL"),
     version: int = Body(..., description="Model version"),
