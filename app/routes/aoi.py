@@ -167,7 +167,7 @@ def create_aoi(
         session.add(aoi)
         session.commit()
 
-        return json.dumps(
+        json_aoi = json.dumps(
             {
                 "id": aoi.id,
                 "name": aoi.name,
@@ -176,3 +176,5 @@ def create_aoi(
         )
     finally:
         session.close()
+
+    return json_aoi
