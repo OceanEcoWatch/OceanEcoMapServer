@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
 from sqlalchemy import func
 
 from app.db.connect import Session
@@ -110,20 +110,22 @@ def get_job_by_aoi(
 
 @router.post("/jobs")
 def create_job(
-    start_date: datetime.datetime = Query(
+    start_date: datetime.datetime = Body(
         description="The start date of the job",
     ),
-    end_date: datetime.datetime = Query(
+    end_date: datetime.datetime = Body(
         description="The end date of the job",
     ),
-    model_id: int = Query(
+    model_id: int = Body(
         description="The id of the model",
     ),
-    aoi_id: int = Query(
+    aoi_id: int = Body(
         description="The id of the AOI",
     ),
-    maxcc: float = Query(
-        description="The maximum cloud coverage",
+    maxcc: float = Body(
+        description="The maximum cloud coverage allowed in the requested images",
+        le=1.0,
+        ge=0.0,
     ),
 ):
     session = Session()

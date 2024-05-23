@@ -1,13 +1,13 @@
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+import geopandas as gpd
+from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
-import geopandas as gpd
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.db.connect import Session
-from app.db.models import AOI, Job
+from app.db.models import AOI
 from app.services.utils import determine_utm_epsg, parse_bbox
 
 router = APIRouter()
@@ -45,7 +45,7 @@ def get_aoi_centers_by_bbox(
                 STANDARD_CRS["SRID"],
             ),
         ),
-        AOI.is_deleted == False  # noqa <E712>
+        AOI.is_deleted == False,  # noqa <E712>
     )
 
     results = query.all()
@@ -68,7 +68,7 @@ def get_aoi_centers_by_bbox(
             south_lat=south_lat,
             east_lon=east_lon,
             north_lat=north_lat,
-            contains=True
+            contains=True,
         )
         # Convert to local CRS
         localized_gdf = gdf.to_crs(epsg=local_epsg)
@@ -77,25 +77,27 @@ def get_aoi_centers_by_bbox(
         # Calculate area in km^2
         area_km2 = localized_polygon.area / 1e6  # Convert to km^2
 
-        results_list.append({
-            "type": "Feature",
-            "properties": {
-                "name": row.name,
-                "id": row.id,
-                "area_km2": area_km2,
-                "polygon": json.loads(row.aoi_geo),
-            },
-            "geometry": json.loads(
-                row.geometry
-            ),  # Ensuring row[3] is treated as a JSON string
-        })
+        results_list.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": row.name,
+                    "id": row.id,
+                    "area_km2": area_km2,
+                    "polygon": json.loads(row.aoi_geo),
+                },
+                "geometry": json.loads(
+                    row.geometry
+                ),  # Ensuring row[3] is treated as a JSON string
+            }
+        )
 
     results_dict = {"type": "FeatureCollection", "features": results_list}
     results_json = json.dumps(results_dict, ensure_ascii=False)
     return JSONResponse(content=results_json)
 
 
-@ router.get("/aoi", tags=["AOI"])
+@router.get("/aoi", tags=["AOI"])
 def get_aoi_by_bbox(
     bbox: str | None = Query(
         WORLD_WIDE_BBOX["query_str"],
@@ -148,3 +150,29 @@ def get_aoi_by_bbox(
     results_dict = {"type": "FeatureCollection", "features": results_list}
     results_json = json.dumps(results_dict, ensure_ascii=False)
     return results_json
+
+
+@router.post("/aoi", tags=["AOI"])
+def create_aoi(
+    name: str = Body(
+        description="Name of the AOI",
+    ),
+    geometry: dict = Body(
+        description="GeoJSON Polygon geometry",
+    ),
+):
+    session = Session()
+    try:
+        aoi = AOI(name=name, geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry)))
+        session.add(aoi)
+        session.commit()
+
+        return json.dumps(
+            {
+                "id": aoi.id,
+                "name": aoi.name,
+                "created_at": aoi.created_at.isoformat(),
+            }
+        )
+    finally:
+        session.close()
