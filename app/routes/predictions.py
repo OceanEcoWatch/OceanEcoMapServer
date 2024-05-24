@@ -40,7 +40,7 @@ async def get_aoi_images_grouped_by_day(
 
     days = {}
     for row in results:
-        start_of_day = get_start_of_day_unix_timestamp(row.timestamp)
+        start_of_day = await get_start_of_day_unix_timestamp(row.timestamp)
         row_data = {
             "image_id": row.id,
             "timestamp": row.timestamp.timestamp(),
@@ -55,7 +55,8 @@ async def get_aoi_images_grouped_by_day(
 
 async def get_start_of_day_unix_timestamp(date_time):
     utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    start_of_utc_day = datetime(
+        utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
@@ -90,7 +91,8 @@ async def get_predictions_by_day(
                     AOI.id,
                     Image.timestamp,
                     Image.id,
-                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                    func.ST_AsGeoJSON(
+                        PredictionVector.geometry).label("geometry"),
                     PredictionVector.pixel_value,
                 )
                 .join(Job, Job.aoi_id == AOI.id)
