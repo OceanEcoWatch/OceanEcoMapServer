@@ -16,7 +16,7 @@ phases:
       - docker push $IMAGE_URI
       - echo "Image pushed to ECR with tag $IMAGE_TAG"
       - |
-        printf '{"AWSEBDockerrunVersion": "1", "Image": {"Name": "%s", "Update": "true"}, "Ports": [{"ContainerPort": "80"}]}' "$IMAGE_URI" > Dockerrun.aws.json
+        printf '{"AWSEBDockerrunVersion": "1", "Image": {"Name": "%s", "Update": "true"}, "Ports": [{"ContainerPort": "443"}]}' "$IMAGE_URI" > Dockerrun.aws.json
 artifacts:
   files:
     - Dockerrun.aws.json

@@ -2,5 +2,4 @@ services:
   app:
     build: .
     ports:
-      - "80:80"
-      - "443:80"
+      - "443:443"
