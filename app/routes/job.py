@@ -4,6 +4,7 @@ import json
 from fastapi import APIRouter, Body, HTTPException, Query
 from sqlalchemy import func
 
+from app.constants.spec import MAX_JOB_TIME_RANGE_DAYS
 from app.db.connect import Session
 from app.db.models import (
     Image,
@@ -106,13 +107,28 @@ async def get_job_by_aoi(
     return json.dumps(response, ensure_ascii=False)
 
 
+def enforce_time_range(start_date: datetime.datetime, end_date: datetime.datetime):
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="The start date must be before the end date",
+        )
+
+    diff = end_date - start_date
+    if diff.days > MAX_JOB_TIME_RANGE_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The time range must be less than {MAX_JOB_TIME_RANGE_DAYS} days",
+        )
+
+
 @router.post("/jobs", tags=["Jobs"])
 async def create_job(
     start_date: datetime.datetime = Body(
-        description="The start date of the job",
+        description="The start date for the job",
     ),
     end_date: datetime.datetime = Body(
-        description="The end date of the job",
+        description="The end date for the job",
     ),
     model_id: int = Body(
         description="The id of the model",
@@ -126,6 +142,7 @@ async def create_job(
         ge=0.0,
     ),
 ):
+    enforce_time_range(start_date, end_date)
     session = Session()
     try:
         job = Job(
