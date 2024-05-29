@@ -15,6 +15,7 @@ if "DEBUG" in os.environ:
         "CLIENT_ID": os.environ["SH_CLIENT_ID"],
         "INSTANCE_ID": os.environ["SH_INSTANCE_ID"],
     }
+    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 
     # Check if DB_URL exists
     if "DB_URL" in os.environ:
@@ -41,6 +42,7 @@ else:  # in Production get the secrets from AWS
         "CLIENT_ID": get_parameter("/fastAPI-backend/SH_CLIENT_ID"),
         "CLIENT_SECRET": get_parameter("/fastAPI-backend/SH_CLIENT_SECRET")
     }
+    GITHUB_TOKEN = get_parameter("/fastAPI-backend/GITHUB_TOKEN")
     DB_USER = get_parameter("/fastAPI-backend/DB_USER")
     DB_PW = get_parameter("/fastAPI-backend/DB_PW")
     DB_NAME = get_parameter("/fastAPI-backend/DB_NAME")

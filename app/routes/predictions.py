@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 
-from app.config.config import DEFAULT_MAX_ROW_LIMIT
+from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
 
@@ -189,7 +189,7 @@ async def run_prediction_job(
                 status_code=400,
                 detail="Job already completed",
             )
-        token = os.getenv("GITHUB_TOKEN")
+        token = GITHUB_TOKEN
         if not token:
             raise HTTPException(
                 status_code=500,
