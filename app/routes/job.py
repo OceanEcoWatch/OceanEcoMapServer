@@ -122,6 +122,19 @@ def enforce_time_range(start_date: datetime.datetime, end_date: datetime.datetim
         )
 
 
+def split_date_range(
+    start_date: datetime.datetime, end_date: datetime.datetime, max_days: int = 31
+):
+    delta = datetime.timedelta(days=max_days)
+    current_start = start_date
+    ranges = []
+    while current_start < end_date:
+        current_end = min(current_start + delta, end_date)
+        ranges.append((current_start, current_end))
+        current_start = current_end + datetime.timedelta(days=1)
+    return ranges
+
+
 @router.post("/jobs", tags=["Jobs"])
 async def create_job(
     start_date: datetime.datetime = Body(
@@ -141,34 +154,48 @@ async def create_job(
         le=1.0,
         ge=0.0,
     ),
+    create_multiple: bool = Body(
+        description="If true, multiple jobs will be created. For every 31 days in the time range a new job will be created.",
+        default=False,
+    ),
 ):
-    enforce_time_range(start_date, end_date)
     session = Session()
     try:
-        job = Job(
-            status=JobStatus.PENDING,
-            start_date=start_date,
-            end_date=end_date,
-            model_id=model_id,
-            aoi_id=aoi_id,
-            maxcc=maxcc,
-        )
-        session.add(job)
-        session.commit()
-        json_job = {
-            "job_id": job.id,
-            "status": str(job.status.value),
-            "created_at": job.created_at.isoformat(),
-            "start_date": job.start_date.isoformat(),
-            "end_date": job.end_date.isoformat(),
-            "maxcc": job.maxcc,
-            "model_id": job.model_id,
-            "images": [],
-        }
+        if create_multiple:
+            date_ranges = split_date_range(start_date, end_date)
+        else:
+            enforce_time_range(start_date, end_date)
+            date_ranges = [(start_date, end_date)]
+
+        json_jobs = []
+
+        for start, end in date_ranges:
+            job = Job(
+                status=JobStatus.PENDING,
+                start_date=start,
+                end_date=end,
+                model_id=model_id,
+                aoi_id=aoi_id,
+                maxcc=maxcc,
+            )
+            session.add(job)
+            session.commit()
+            json_job = {
+                "job_id": job.id,
+                "status": str(job.status.value),
+                "created_at": job.created_at.isoformat(),
+                "start_date": job.start_date.isoformat(),
+                "end_date": job.end_date.isoformat(),
+                "maxcc": job.maxcc,
+                "model_id": job.model_id,
+                "images": [],
+            }
+            json_jobs.append(json_job)
+
     finally:
         session.close()
 
-    return json.dumps(json_job, ensure_ascii=False)
+    return json.dumps(json_jobs, ensure_ascii=False)
 
 
 @router.get("/jobs/{job_id}", tags=["Jobs"])

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import declarative_base, relationship  # type: ignore
 
@@ -39,6 +40,10 @@ class AOI(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.now)
     is_deleted = Column(Boolean, nullable=False, default=False)
     geometry = Column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
+
+    @property
+    def area_sqkm(self):
+        return func.ST_Area
 
     def __init__(
         self,

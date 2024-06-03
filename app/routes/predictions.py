@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -7,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 
-from app.config.config import DEFAULT_MAX_ROW_LIMIT
+from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
 
@@ -55,8 +54,7 @@ async def get_aoi_images_grouped_by_day(
 
 async def get_start_of_day_unix_timestamp(date_time):
     utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(
-        utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
@@ -91,8 +89,7 @@ async def get_predictions_by_day(
                     AOI.id,
                     Image.timestamp,
                     Image.id,
-                    func.ST_AsGeoJSON(
-                        PredictionVector.geometry).label("geometry"),
+                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
                     PredictionVector.pixel_value,
                 )
                 .join(Job, Job.aoi_id == AOI.id)
@@ -178,6 +175,10 @@ async def run_prediction_job(
         ...,
         description="Id of the job to run the prediction for",
     ),
+    probability_threshold: float = Query(
+        0.33,
+        description="The minimum probability of the prediction to be included in the results",
+    ),
 ):
     session = Session()
     try:
@@ -189,7 +190,7 @@ async def run_prediction_job(
                 status_code=400,
                 detail="Job already completed",
             )
-        token = os.getenv("GITHUB_TOKEN")
+        token = GITHUB_TOKEN
         if not token:
             raise HTTPException(
                 status_code=500,
@@ -208,6 +209,7 @@ async def run_prediction_job(
             "ref": "main",  # The branch or tag to run the workflow on
             "inputs": {
                 "job_id": str(job.id),
+                "probability_threshold": str(probability_threshold),
             },
         }
 
