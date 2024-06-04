@@ -1,6 +1,8 @@
 import datetime
 import enum
-from typing import NamedTuple
+from typing import NamedTuple, Optional, Union
+
+from pydantic import BaseModel
 
 
 class SCL(enum.IntEnum):
@@ -51,3 +53,38 @@ class TimeRange(NamedTuple):
 class HeightWidth(NamedTuple):
     height: int
     width: int
+
+
+class Geometry(BaseModel):
+    type: str
+    coordinates: list
+
+
+class Feature(BaseModel):
+    type: str
+    geometry: Geometry
+    properties: Optional[dict]
+
+
+class FeatureCollection(BaseModel):
+    type: str
+    features: list[Feature]
+
+
+GeoJSON = Union[Geometry, Feature, FeatureCollection]
+
+
+class PolygonGeometry(Geometry):
+    type: str = "Polygon"
+    coordinates: list[list[list[float]]]
+
+
+class PolygonFeature(Feature):
+    geometry: PolygonGeometry
+
+
+class PolygonFeatureCollection(FeatureCollection):
+    features: list[PolygonFeature]
+
+
+PolygonGeoJSON = Union[PolygonGeometry, PolygonFeature, PolygonFeatureCollection]

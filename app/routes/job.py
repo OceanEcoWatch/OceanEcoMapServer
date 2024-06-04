@@ -4,6 +4,7 @@ import json
 from fastapi import APIRouter, Body, HTTPException, Query
 from sqlalchemy import func
 
+from app.constants.spec import MAX_JOB_TIME_RANGE_DAYS
 from app.db.connect import Session
 from app.db.models import (
     Image,
@@ -106,7 +107,24 @@ async def get_job_by_aoi(
     return json.dumps(response, ensure_ascii=False)
 
 
-def split_date_range(start_date: datetime.datetime, end_date: datetime.datetime, max_days: int = 31):
+def enforce_time_range(start_date: datetime.datetime, end_date: datetime.datetime):
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="The start date must be before the end date",
+        )
+
+    diff = end_date - start_date
+    if diff.days > MAX_JOB_TIME_RANGE_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The time range must be less than {MAX_JOB_TIME_RANGE_DAYS} days",
+        )
+
+
+def split_date_range(
+    start_date: datetime.datetime, end_date: datetime.datetime, max_days: int = 31
+):
     delta = datetime.timedelta(days=max_days)
     current_start = start_date
     ranges = []
@@ -120,10 +138,10 @@ def split_date_range(start_date: datetime.datetime, end_date: datetime.datetime,
 @router.post("/jobs", tags=["Jobs"])
 async def create_job(
     start_date: datetime.datetime = Body(
-        description="The start date of the job",
+        description="The start date for the job",
     ),
     end_date: datetime.datetime = Body(
-        description="The end date of the job",
+        description="The end date for the job",
     ),
     model_id: int = Body(
         description="The id of the model",
@@ -139,13 +157,14 @@ async def create_job(
     create_multiple: bool = Body(
         description="If true, multiple jobs will be created. For every 31 days in the time range a new job will be created.",
         default=False,
-    )
+    ),
 ):
     session = Session()
     try:
         if create_multiple:
             date_ranges = split_date_range(start_date, end_date)
         else:
+            enforce_time_range(start_date, end_date)
             date_ranges = [(start_date, end_date)]
 
         json_jobs = []

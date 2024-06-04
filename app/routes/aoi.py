@@ -3,12 +3,15 @@ import json
 import geopandas as gpd
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import JSONResponse
+from shapely.geometry import shape
 from sqlalchemy import func
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
+from app.constants.spec import MAX_AOI_SQKM
 from app.db.connect import Session
 from app.db.models import AOI
 from app.services.utils import determine_utm_epsg, parse_bbox
+from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
 
 router = APIRouter()
 
@@ -152,18 +155,50 @@ async def get_aoi_by_bbox(
     return results_json
 
 
+def enforce_max_aoi_area(area_km2: float):
+    if area_km2 > MAX_AOI_SQKM:
+        raise HTTPException(
+            status_code=400, detail="Area of Interest exceeds maximum area of 100 km^2"
+        )
+
+
 @router.post("/aoi", tags=["AOI"])
 async def create_aoi(
     name: str = Body(
         description="Name of the AOI",
     ),
-    geometry: dict = Body(
-        description="GeoJSON Polygon geometry",
+    geometry: PolygonGeoJSON = Body(
+        description="Polygon GeoJSON object representing the AOI. If a FeatureCollection is provided, only the first feature will be used.",
     ),
 ):
+    if isinstance(geometry, PolygonFeatureCollection):
+        geometry = geometry.features[0].geometry
+    elif isinstance(geometry, PolygonFeature):
+        geometry = geometry.geometry
+
+    polygon = shape(geometry.model_dump())
+
+    gdf = gpd.GeoDataFrame(index=[0], crs="EPSG:4326", geometry=[polygon])
+    local_utm_epsg = determine_utm_epsg(
+        source_epsg=4326,
+        west_lon=gdf.total_bounds[0],
+        south_lat=gdf.total_bounds[1],
+        east_lon=gdf.total_bounds[2],
+        north_lat=gdf.total_bounds[3],
+        contains=True,
+    )
+    localized_gdf = gdf.to_crs(epsg=local_utm_epsg)
+    localized_polygon = localized_gdf.iloc[0].geometry
+
+    area_km2 = localized_polygon.area / 1e6
+
+    enforce_max_aoi_area(area_km2)
     session = Session()
     try:
-        aoi = AOI(name=name, geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry)))
+        aoi = AOI(
+            name=name,
+            geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry.model_dump())),
+        )
         session.add(aoi)
         session.commit()
 
