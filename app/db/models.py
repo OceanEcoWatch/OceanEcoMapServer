@@ -14,7 +14,6 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.orm import declarative_base, relationship  # type: ignore
 
@@ -41,9 +40,7 @@ class AOI(Base):
     is_deleted = Column(Boolean, nullable=False, default=False)
     geometry = Column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
 
-    @property
-    def area_sqkm(self):
-        return func.ST_Area
+    jobs = relationship("Job", backref="aoi", cascade="all, delete, delete-orphan")
 
     def __init__(
         self,
@@ -66,6 +63,8 @@ class Model(Base):
     model_url = Column(CONSTRAINT_STR, nullable=False, unique=True)
     created_at = Column(DateTime, nullable=False, default=datetime.datetime.now)
     version = Column(Integer, nullable=False, default=1)
+
+    jobs = relationship("Job", backref="model", cascade="all, delete, delete-orphan")
 
     def __init__(
         self,
@@ -94,9 +93,9 @@ class Job(Base):
     end_date = Column(DateTime, nullable=False)
     maxcc = Column(Float, nullable=False)
     aoi_id = Column(Integer, ForeignKey("aois.id"), nullable=False)
-    aoi = relationship("AOI", backref="jobs")
     model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
-    model = relationship("Model", backref="jobs")
+
+    images = relationship("Image", backref="job", cascade="all, delete, delete-orphan")
 
     def __init__(
         self,
@@ -121,7 +120,7 @@ class Job(Base):
 
 class Image(Base):
     __tablename__ = "images"
-    __table_args__ = (UniqueConstraint("image_id", "timestamp", "bbox"),)
+    __table_args__ = (UniqueConstraint("image_id", "timestamp", "bbox", "job_id"),)
 
     id = Column(Integer, primary_key=True)
     image_id = Column(CONSTRAINT_STR, nullable=False)
@@ -138,11 +137,9 @@ class Image(Base):
     bands = Column(Integer, CheckConstraint("bands>0 AND bands<=100"), nullable=False)
     provider = Column(CONSTRAINT_STR, nullable=False)
     bbox = Column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
-
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
-    jobs = relationship("Job", backref="images")
 
-    prediction_rasters = relationship(
+    prediction_raster = relationship(
         "PredictionRaster", backref="image", cascade="all, delete, delete-orphan"
     )
     scene_classification_vectors = relationship(
@@ -193,7 +190,7 @@ class PredictionRaster(Base):
     image_height = Column(Integer, nullable=False)
     bbox = Column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
 
-    image_id = Column(Integer, ForeignKey("images.id"), nullable=False)
+    image_id = Column(Integer, ForeignKey("images.id"), nullable=False, unique=True)
     prediction_vectors = relationship(
         "PredictionVector",
         backref="prediction_raster",
