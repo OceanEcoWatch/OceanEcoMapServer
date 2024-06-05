@@ -54,7 +54,8 @@ async def get_aoi_images_grouped_by_day(
 
 async def get_start_of_day_unix_timestamp(date_time):
     utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    start_of_utc_day = datetime(
+        utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
@@ -89,7 +90,8 @@ async def get_predictions_by_day(
                     AOI.id,
                     Image.timestamp,
                     Image.id,
-                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                    func.ST_AsGeoJSON(
+                        PredictionVector.geometry).label("geometry"),
                     PredictionVector.pixel_value,
                 )
                 .join(Job, Job.aoi_id == AOI.id)
@@ -170,10 +172,10 @@ async def get_predictions(limit: int = DEFAULT_MAX_ROW_LIMIT):
 
 
 @router.post("/predictions", tags=["Predictions"])
-async def run_prediction_job(
-    job_id: int = Query(
+async def run_prediction_jobs(
+    job_ids: list[int] = Query(
         ...,
-        description="Id of the job to run the prediction for",
+        description="List of job IDs to run the predictions for",
     ),
     probability_threshold: float = Query(
         0.33,
@@ -182,51 +184,56 @@ async def run_prediction_job(
 ):
     session = Session()
     try:
-        job = session.query(Job).filter(Job.id == job_id).one_or_none()
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        if job.status == JobStatus.COMPLETED:
-            raise HTTPException(
-                status_code=400,
-                detail="Job already completed",
-            )
-        token = GITHUB_TOKEN
-        if not token:
-            raise HTTPException(
-                status_code=500,
-                detail="GITHUB_TOKEN  not set",
-            )
-        owner = "OceanEcoWatch"
-        repo = "PlasticDetectionService"
-        workflow_id = "job.yml"  # You can find this in the workflow URL
+        results = []
+        for job_id in job_ids:
+            job = session.query(Job).filter(Job.id == job_id).one_or_none()
+            if not job:
+                raise HTTPException(
+                    status_code=404, detail=f"Job with ID {job_id} not found")
+            if job.status == JobStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Job with ID {job_id} already completed",
+                )
+            token = GITHUB_TOKEN
+            if not token:
+                raise HTTPException(
+                    status_code=500,
+                    detail="GITHUB_TOKEN not set",
+                )
+            owner = "OceanEcoWatch"
+            repo = "PlasticDetectionService"
+            workflow_id = "job.yml"  # You can find this in the workflow URL
 
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"token {token}",
-        }
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {token}",
+            }
 
-        data = {
-            "ref": "main",  # The branch or tag to run the workflow on
-            "inputs": {
-                "job_id": str(job.id),
-                "probability_threshold": str(probability_threshold),
-            },
-        }
+            data = {
+                "ref": "main",  # The branch or tag to run the workflow on
+                "inputs": {
+                    "job_id": str(job.id),
+                    "probability_threshold": str(probability_threshold),
+                },
+            }
 
-        response = requests.post(
-            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
-            headers=headers,
-            json=data,
-        )
-        try:
-            response.raise_for_status()
-        except requests.exceptions.HTTPError as err:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error running prediction job: {err}",
+            response = requests.post(
+                f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+                headers=headers,
+                json=data,
             )
+            try:
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as err:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error running prediction job for job ID {job_id}: {err}",
+                )
+            results.append(
+                {"job_id": job_id, "message": "Prediction job started"})
 
     finally:
         session.close()
 
-    return {"message": "Prediction job started"}
+    return {"results": results}
