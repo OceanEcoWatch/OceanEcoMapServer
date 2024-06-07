@@ -36,7 +36,7 @@ async def get_aoi_centers_by_bbox(
         AOI.name,
         func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
         func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
-        func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo"),
+        func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo")
     ).filter(
         func.ST_Intersects(
             AOI.geometry,
@@ -80,6 +80,9 @@ async def get_aoi_centers_by_bbox(
         # Calculate area in km^2
         area_km2 = localized_polygon.area / 1e6  # Convert to km^2
 
+        # Create bounding box as array
+        bounding_box = [west_lon, south_lat, east_lon, north_lat]
+
         results_list.append(
             {
                 "type": "Feature",
@@ -88,10 +91,10 @@ async def get_aoi_centers_by_bbox(
                     "id": row.id,
                     "area_km2": area_km2,
                     "polygon": json.loads(row.aoi_geo),
+                    "bbox": bounding_box
                 },
-                "geometry": json.loads(
-                    row.geometry
-                ),  # Ensuring row[3] is treated as a JSON string
+                # Ensuring row.geometry is treated as a JSON string
+                "geometry": json.loads(row.geometry),
             }
         )
 
@@ -143,9 +146,8 @@ async def get_aoi_by_bbox(
                 "name": row[1],
                 "created_at": row[2].isoformat(),
             },
-            "geometry": json.loads(
-                row[3]
-            ),  # Ensuring row[3] is treated as a JSON string
+            # Ensuring row[3] is treated as a JSON string
+            "geometry": json.loads(row[3]),
         }
         for row in results
     ]
@@ -197,7 +199,8 @@ async def create_aoi(
     try:
         aoi = AOI(
             name=name,
-            geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry.model_dump())),
+            geometry=func.ST_GeomFromGeoJSON(
+                json.dumps(geometry.model_dump())),
         )
         session.add(aoi)
         session.commit()
