@@ -108,6 +108,7 @@ async def get_predictions_by_day(
                         PredictionVector.geometry,
                         AOI.geometry,
                     ),
+                    AOI.id == aoi_id,
                     PredictionVector.pixel_value >= max_pixel_value,
                 )
             )
