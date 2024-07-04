@@ -57,7 +57,7 @@ async def get_aoi_centers_by_bbox(
         )
         .join(Job, AOI.id == Job.aoi_id, isouter=True)
         .join(Image, Job.id == Image.job_id, isouter=True)
-    ).group_by(AOI.id, AOI.name)
+    ).group_by(AOI.id)
 
     results = query.all()
     session.close()
