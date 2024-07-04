@@ -128,23 +128,32 @@ async def get_aoi_by_bbox(
 
     # Query for geometries within the bounding box
     session = Session()
-    query = session.query(
-        AOI.id,
-        AOI.name,
-        AOI.created_at,
-        func.ST_AsGeoJSON(AOI.geometry),
-    ).filter(
-        func.ST_Intersects(
-            AOI.geometry,
-            func.ST_MakeEnvelope(
-                parsed_bbox.max_x,
-                parsed_bbox.min_y,
-                parsed_bbox.min_x,
-                parsed_bbox.max_y,
-                STANDARD_CRS["SRID"],
+    query = (
+        session.query(
+            AOI.id,
+            AOI.name,
+            AOI.created_at,
+            func.min(Image.timestamp).label("start_date"),
+            func.max(Image.timestamp).label("end_date"),
+            func.count(distinct(Image.timestamp)).label("image_count"),
+            func.ST_AsGeoJSON(AOI.geometry).label("geometry"),
+        )
+        .filter(
+            func.ST_Intersects(
+                AOI.geometry,
+                func.ST_MakeEnvelope(
+                    parsed_bbox.max_x,
+                    parsed_bbox.min_y,
+                    parsed_bbox.min_x,
+                    parsed_bbox.max_y,
+                    STANDARD_CRS["SRID"],
+                ),
             ),
-        ),
-        AOI.is_deleted == False,  # noqa <E712>
+            AOI.is_deleted == False,  # noqa <E712>
+        )
+        .join(Job, AOI.id == Job.aoi_id, isouter=True)
+        .join(Image, Job.id == Image.job_id, isouter=True)
+        .group_by(AOI.id)
     )
     results = query.all()
     session.close()
@@ -153,12 +162,14 @@ async def get_aoi_by_bbox(
         {
             "type": "Feature",
             "properties": {
-                "id": row[0],
-                "name": row[1],
-                "created_at": row[2].isoformat(),
+                "id": row.id,
+                "name": row.name,
+                "created_at": row.created_at.isoformat(),
+                "start_date": row.start_date.timestamp(),
+                "end_date": row.end_date.timestamp(),
+                "unique_timestamp_count": row.image_count,
             },
-            # Ensuring row[3] is treated as a JSON string
-            "geometry": json.loads(row[3]),
+            "geometry": json.loads(row.geometry),
         }
         for row in results
     ]
