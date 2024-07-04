@@ -4,12 +4,12 @@ import geopandas as gpd
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import JSONResponse
 from shapely.geometry import shape
-from sqlalchemy import func
+from sqlalchemy import distinct, func
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.constants.spec import MAX_AOI_SQKM
 from app.db.connect import Session
-from app.db.models import AOI
+from app.db.models import AOI, Image, Job
 from app.services.utils import determine_utm_epsg, parse_bbox
 from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
 
@@ -31,25 +31,33 @@ async def get_aoi_centers_by_bbox(
     session = Session()
 
     # Query for geometries within the bounding box
-    query = session.query(
-        AOI.id,
-        AOI.name,
-        func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
-        func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
-        func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo")
-    ).filter(
-        func.ST_Intersects(
-            AOI.geometry,
-            func.ST_MakeEnvelope(
-                parsed_bbox.max_x,
-                parsed_bbox.min_y,
-                parsed_bbox.min_x,
-                parsed_bbox.max_y,
-                STANDARD_CRS["SRID"],
+    query = (
+        session.query(
+            AOI.id,
+            AOI.name,
+            func.min(Image.timestamp).label("start_date"),
+            func.max(Image.timestamp).label("end_date"),
+            func.count(distinct(Image.timestamp)).label("image_count"),
+            func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
+            func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
+            func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo"),
+        )
+        .filter(
+            func.ST_Intersects(
+                AOI.geometry,
+                func.ST_MakeEnvelope(
+                    parsed_bbox.max_x,
+                    parsed_bbox.min_y,
+                    parsed_bbox.min_x,
+                    parsed_bbox.max_y,
+                    STANDARD_CRS["SRID"],
+                ),
             ),
-        ),
-        AOI.is_deleted == False,  # noqa <E712>
-    )
+            AOI.is_deleted == False,  # noqa <E712>
+        )
+        .join(Job, AOI.id == Job.aoi_id, isouter=True)
+        .join(Image, Job.id == Image.job_id, isouter=True)
+    ).group_by(AOI.id, AOI.name)
 
     results = query.all()
     session.close()
@@ -89,9 +97,12 @@ async def get_aoi_centers_by_bbox(
                 "properties": {
                     "name": row.name,
                     "id": row.id,
+                    "start_date": row.start_date.timestamp(),
+                    "end_date": row.end_date.timestamp(),
+                    "unique_timestamp_count": row.image_count,
                     "area_km2": area_km2,
                     "polygon": json.loads(row.aoi_geo),
-                    "bbox": bounding_box
+                    "bbox": bounding_box,
                 },
                 # Ensuring row.geometry is treated as a JSON string
                 "geometry": json.loads(row.geometry),
@@ -199,8 +210,7 @@ async def create_aoi(
     try:
         aoi = AOI(
             name=name,
-            geometry=func.ST_GeomFromGeoJSON(
-                json.dumps(geometry.model_dump())),
+            geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry.model_dump())),
         )
         session.add(aoi)
         session.commit()
