@@ -4,14 +4,15 @@ import geopandas as gpd
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import JSONResponse
 from shapely.geometry import shape
-from sqlalchemy import distinct, func
+from sqlalchemy import case, distinct, func
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.constants.spec import MAX_AOI_SQKM
 from app.db.connect import Session
-from app.db.models import AOI, Image, Job
+from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
 from app.services.utils import determine_utm_epsg, parse_bbox
 from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
+from app.utils import percent_to_accuracy
 
 router = APIRouter()
 
@@ -120,6 +121,10 @@ async def get_aoi_by_bbox(
         WORLD_WIDE_BBOX["query_str"],
         description="Comma-separated bounding box coordinates minx,miny,maxx,maxy  - WGS84",
     ),
+    threshold: int = Query(
+        80,
+        description="Minimum probability threshold for plastic detection (0-100)",
+    ),
 ):
     try:
         parsed_bbox = parse_bbox(bbox)
@@ -136,6 +141,17 @@ async def get_aoi_by_bbox(
             func.min(Image.timestamp).label("start_date"),
             func.max(Image.timestamp).label("end_date"),
             func.count(distinct(Image.timestamp)).label("image_count"),
+            func.count(
+                distinct(
+                    case(
+                        (
+                            PredictionVector.pixel_value
+                            > percent_to_accuracy(threshold),
+                            Image.timestamp,
+                        )
+                    )
+                )
+            ).label("plastic_timestamp_count"),
             func.ST_AsGeoJSON(AOI.geometry).label("geometry"),
         )
         .filter(
@@ -153,6 +169,12 @@ async def get_aoi_by_bbox(
         )
         .join(Job, AOI.id == Job.aoi_id, isouter=True)
         .join(Image, Job.id == Image.job_id, isouter=True)
+        .join(PredictionRaster, Image.id == PredictionRaster.image_id, isouter=True)
+        .join(
+            PredictionVector,
+            PredictionRaster.id == PredictionVector.prediction_raster_id,
+            isouter=True,
+        )
         .group_by(AOI.id)
     )
     results = query.all()
@@ -168,6 +190,7 @@ async def get_aoi_by_bbox(
                 "start_date": row.start_date.timestamp(),
                 "end_date": row.end_date.timestamp(),
                 "unique_timestamp_count": row.image_count,
+                "timestamp_with_plastic_count": row.plastic_timestamp_count,
             },
             "geometry": json.loads(row.geometry),
         }
