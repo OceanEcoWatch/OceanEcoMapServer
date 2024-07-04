@@ -9,6 +9,7 @@ from sqlalchemy import func
 from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
+from app.utils import accuracy_limit_to_percent, percent_to_accuracy
 
 router = APIRouter()
 
@@ -54,8 +55,7 @@ async def get_aoi_images_grouped_by_day(
 
 async def get_start_of_day_unix_timestamp(date_time):
     utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(
-        utc.year, utc.month, utc.day, tzinfo=timezone.utc)
+    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
     return start_of_utc_day.timestamp()
 
 
@@ -90,8 +90,7 @@ async def get_predictions_by_day(
                     AOI.id,
                     Image.timestamp,
                     Image.id,
-                    func.ST_AsGeoJSON(
-                        PredictionVector.geometry).label("geometry"),
+                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
                     PredictionVector.pixel_value,
                 )
                 .join(Job, Job.aoi_id == AOI.id)
@@ -133,14 +132,6 @@ async def get_predictions_by_day(
         return JSONResponse(content=results_dict)
     finally:
         session.close()
-
-
-def percent_to_accuracy(percent: int):
-    return 255 / 100 * percent
-
-
-def accuracy_limit_to_percent(accuracy: int):
-    return accuracy / 255 * 100
 
 
 @router.get("/predictions", tags=["Predictions"])
@@ -190,7 +181,8 @@ async def run_prediction_jobs(
             job = session.query(Job).filter(Job.id == job_id).one_or_none()
             if not job:
                 raise HTTPException(
-                    status_code=404, detail=f"Job with ID {job_id} not found")
+                    status_code=404, detail=f"Job with ID {job_id} not found"
+                )
             if job.status == JobStatus.COMPLETED:
                 raise HTTPException(
                     status_code=400,
@@ -231,8 +223,7 @@ async def run_prediction_jobs(
                     status_code=500,
                     detail=f"Error running prediction job for job ID {job_id}: {err}",
                 )
-            results.append(
-                {"job_id": job_id, "message": "Prediction job started"})
+            results.append({"job_id": job_id, "message": "Prediction job started"})
 
     finally:
         session.close()
