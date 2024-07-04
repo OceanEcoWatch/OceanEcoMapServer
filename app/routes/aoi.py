@@ -205,7 +205,7 @@ async def get_aoi_by_bbox(
 def enforce_max_aoi_area(area_km2: float):
     if area_km2 > MAX_AOI_SQKM:
         raise HTTPException(
-            status_code=400, detail="Area of Interest exceeds maximum area of 100 km^2"
+            status_code=400, detail=f"Area of Interest exceeds maximum area of {MAX_AOI_SQKM} km^2"
         )
 
 
