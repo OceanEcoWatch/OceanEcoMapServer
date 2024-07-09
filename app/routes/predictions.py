@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import requests
 from fastapi import APIRouter, HTTPException, Query
@@ -9,7 +9,11 @@ from sqlalchemy import func
 from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
-from app.utils import accuracy_limit_to_percent, percent_to_accuracy
+from app.utils import (
+    accuracy_limit_to_percent,
+    get_start_of_day_unix_timestamp,
+    percent_to_accuracy,
+)
 
 router = APIRouter()
 
@@ -51,12 +55,6 @@ async def get_aoi_images_grouped_by_day(
         else:
             days[start_of_day].append(row_data)
     return JSONResponse(content=days)
-
-
-async def get_start_of_day_unix_timestamp(date_time):
-    utc = date_time.astimezone(timezone.utc)
-    start_of_utc_day = datetime(utc.year, utc.month, utc.day, tzinfo=timezone.utc)
-    return start_of_utc_day.timestamp()
 
 
 @router.get("/predictions-by-day-and-aoi", tags=["Predictions"])
