@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import aoi, job, model, predictions, scl
+from app.routes import aoi, job, model, predictions, satellite, scl
 
 app = FastAPI()
 
@@ -23,6 +23,7 @@ app.include_router(aoi.router)
 app.include_router(job.router)
 app.include_router(scl.router)
 app.include_router(model.router)
+app.include_router(satellite.router)
 
 
 @app.get("/health", tags=["Health Check"])
