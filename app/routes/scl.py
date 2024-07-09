@@ -9,15 +9,21 @@ from app.db.models import AOI, Image, Job, SceneClassificationVector
 from app.types.helpers import SCL
 
 router = APIRouter()
+scl_description = "Classification values to filter by:\n" + "\n".join(
+    [f"{item.name} = {item.value}," for item in SCL]
+)
 
 
 @router.get("/scl", tags=["SCL"])
 async def scl(
     classification: list[SCL] = Query(
-        default=None, title="Classification values to filter by"
+        default=None,
+        description=scl_description,
     ),
-    aoi_id: int = Query(default=None, title="AOI ID to filter by"),
-    timestamp: str = Query(default=None, title="Timestamp to filter by (ISO format)"),
+    aoi_id: int = Query(default=None, description="AOI ID to filter by"),
+    timestamp: str = Query(
+        default=None, description="Timestamp to filter by (ISO format)"
+    ),
 ):
     session = Session()
 
@@ -64,7 +70,6 @@ async def scl(
 
     if not results:
         raise HTTPException(status_code=404, detail="No SCL data found for query")
-    print(results[0])
     results_list = [
         {
             "type": "Feature",
