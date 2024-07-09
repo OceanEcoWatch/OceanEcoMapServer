@@ -1,7 +1,8 @@
 import datetime
 import enum
 
-from geoalchemy2 import Geometry, WKBElement
+from geoalchemy2 import Geometry
+from geoalchemy2.elements import WKBElement
 from sqlalchemy import (
     Boolean,
     Column,
@@ -13,8 +14,9 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base, relationship
-from src._types import IMAGE_DTYPES
+from sqlalchemy.orm import declarative_base, relationship  # type: ignore
+
+from app.types.helpers import IMAGE_DTYPES
 
 Base = declarative_base()
 
