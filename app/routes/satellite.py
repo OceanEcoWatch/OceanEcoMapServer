@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -62,4 +64,20 @@ def create_satellite(satellite: SatelliteCreate, db: Session = Depends(get_db)):
         db.add(db_band)
 
     db.commit()
-    return db_satellite
+    return json.dumps(
+        {
+            "id": db_satellite.id,
+            "name": db_satellite.name,
+            "bands": [
+                {
+                    "index": band.index,
+                    "name": band.name,
+                    "description": band.description,
+                    "resolution": band.resolution,
+                    "wavelength": band.wavelength,
+                }
+                for band in db_satellite.bands
+            ],
+        },
+        ensure_ascii=False,
+    )
