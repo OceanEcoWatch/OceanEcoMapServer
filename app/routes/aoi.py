@@ -255,6 +255,7 @@ async def create_aoi(
     )
     db.add(aoi)
     db.commit()
+    db.refresh(aoi)
 
     json_aoi = json.dumps(
         {
