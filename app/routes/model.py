@@ -17,13 +17,15 @@ class ModelCreate(BaseModel):
     expected_image_width: int = Field(..., example=480)
     type: ModelType = Field(..., example=ModelType.SEGMENTATION)
     output_dtype: str = Field(..., example="uint8")
+    version: int = Field(..., example=1)
 
 
 @router.get("/model", tags=["Model"])
 async def get_model(
     model_id: str | None = Query(None, description="Model ID"),
     model_url: str | None = Query(None, description="Model URL"),
-    version: int | None = Query(None, description="Model version"),
+    version: int | None = Query(None, description="Model Version"),
+    model_type: ModelType | None = Query(None, description="Model Type"),
     db: Session = Depends(get_db),
 ):
     models = db.query(Model)
@@ -33,11 +35,17 @@ async def get_model(
         models = models.filter(Model.model_url == model_url)
     if version:
         models = models.filter(Model.version == version)
+    if model_type:
+        models = models.filter(Model.type == model_type)
 
     json_models = [
         {
             "model_id": model.model_id,
             "model_url": model.model_url,
+            "expected_image_height": model.expected_image_height,
+            "expected_image_width": model.expected_image_width,
+            "output_dtype": model.output_dtype,
+            "type": model.type,
             "version": model.version,
         }
         for model in models
@@ -56,7 +64,7 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
         type=model.type,
         output_dtype=model.output_dtype,
         created_at=datetime.datetime.now(),
-        version=1,
+        version=model.version,
     )
     db.add(db_model)
     db.commit()
