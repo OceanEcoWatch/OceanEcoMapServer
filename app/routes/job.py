@@ -36,7 +36,6 @@ async def get_job_by_aoi(
             Image.id.label("Image_id"),
             Image.image_url,
             Image.timestamp,
-            Image.provider,
             PredictionVector.pixel_value,
             func.ST_AsGeoJSON(PredictionVector.geometry).label(
                 "PredictionVector_geometry"
@@ -84,7 +83,6 @@ async def get_job_by_aoi(
                     "image_id": row.Image_id,
                     "image_url": row.image_url,
                     "timestamp": row.timestamp.timestamp(),
-                    "provider": row.provider,
                     "predictions": [],
                 }
             )
@@ -167,7 +165,10 @@ async def create_job(
         date_ranges = [(start_date, end_date)]
 
     json_jobs = []
-
+    if db.query(Model).filter(Model.id == model_id).count() == 0:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if db.query(Job).filter(Job.aoi_id == aoi_id).count() == 0:
+        raise HTTPException(status_code=404, detail="AOI not found")
     for start, end in date_ranges:
         job = Job(
             status=JobStatus.PENDING,

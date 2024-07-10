@@ -1,10 +1,11 @@
 import datetime
+import json
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.db.connect import Session
-from app.db.models import Model, ModelType
+from app.db.models import Band, Model, ModelBand, ModelType, Satellite
 from app.utils import get_db
 
 router = APIRouter()
@@ -18,6 +19,8 @@ class ModelCreate(BaseModel):
     type: ModelType = Field(..., example=ModelType.SEGMENTATION)
     output_dtype: str = Field(..., example="uint8")
     version: int = Field(..., example=1)
+    satellite_name: str = Field(..., example="SENTINEL2_L1C")
+    band_indices: list[int] = Field(..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12])
 
 
 @router.get("/model", tags=["Model"])
@@ -56,6 +59,16 @@ async def get_model(
 
 @router.post("/model", tags=["Model"])
 def create_model(model: ModelCreate, db: Session = Depends(get_db)):
+    # Check if the satellite exists by name
+    satellite = (
+        db.query(Satellite).filter(Satellite.name == model.satellite_name).first()
+    )
+    if not satellite:
+        return HTTPException(
+            status_code=404, detail="Satellite not found with the given name"
+        )
+
+    # Create the model instance
     db_model = Model(
         model_id=model.model_id,
         model_url=model.model_url,
@@ -69,4 +82,37 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
     db.add(db_model)
     db.commit()
     db.refresh(db_model)
-    return db_model
+
+    # Fetch the bands based on the index and satellite ID
+    bands = (
+        db.query(Band)
+        .filter(Band.satellite_id == satellite.id, Band.index.in_(model.band_indices))
+        .all()
+    )
+
+    # Create ModelBand instances
+    model_bands = [ModelBand(model_id=db_model.id, band_id=band.id) for band in bands]
+    db.add_all(model_bands)
+    db.commit()
+
+    return json.dumps(
+        {
+            "model_id": db_model.model_id,
+            "model_url": db_model.model_url,
+            "expected_image_height": db_model.expected_image_height,
+            "expected_image_width": db_model.expected_image_width,
+            "output_dtype": db_model.output_dtype,
+            "type": db_model.type,
+            "version": db_model.version,
+            "bands": [
+                {
+                    "index": band.index,
+                    "name": band.name,
+                    "description": band.description,
+                    "resolution": band.resolution,
+                    "wavelength": band.wavelength,
+                }
+                for band in bands
+            ],
+        }
+    )
