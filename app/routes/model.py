@@ -12,17 +12,18 @@ router = APIRouter()
 
 
 class ModelCreate(BaseModel):
-    model_id: str = Field(...)
+    model_id: str = Field(..., example="oceanecowatch/plasticdetectionmodel:1.0.1")
     model_url: str = Field(...)
     expected_image_height: int = Field(..., example=480)
     expected_image_width: int = Field(..., example=480)
     type: ModelType = Field(..., example=ModelType.SEGMENTATION)
     output_dtype: str = Field(..., example="uint8")
     version: int = Field(..., example=1)
-    satellite_name: str = Field(..., example="SENTINEL2_L1C")
+    satellite_name: str = Field(..., example="SENTINEL2_L2A")
     band_indices: list[int] = Field(
         ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     )
+    classification_classes: list[str] = Field(..., example=["Marine Debris"])
 
 
 @router.get("/model", tags=["Model"])
