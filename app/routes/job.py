@@ -7,6 +7,7 @@ from sqlalchemy import func
 from app.constants.spec import MAX_JOB_TIME_RANGE_DAYS
 from app.db.connect import Session
 from app.db.models import (
+    AOI,
     Image,
     Job,
     JobStatus,
@@ -167,7 +168,7 @@ async def create_job(
     json_jobs = []
     if db.query(Model).filter(Model.id == model_id).count() == 0:
         raise HTTPException(status_code=404, detail="Model not found")
-    if db.query(Job).filter(Job.aoi_id == aoi_id).count() == 0:
+    if db.query(AOI).filter(AOI.id == aoi_id).count() == 0:
         raise HTTPException(status_code=404, detail="AOI not found")
     for start, end in date_ranges:
         job = Job(

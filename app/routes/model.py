@@ -20,7 +20,9 @@ class ModelCreate(BaseModel):
     output_dtype: str = Field(..., example="uint8")
     version: int = Field(..., example=1)
     satellite_name: str = Field(..., example="SENTINEL2_L1C")
-    band_indices: list[int] = Field(..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12])
+    band_indices: list[int] = Field(
+        ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    )
 
 
 @router.get("/model", tags=["Model"])
