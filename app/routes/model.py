@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.db.connect import Session
-from app.db.models import Band, Model, ModelBand, ModelType, Satellite
+from app.db.models import (
+    Band,
+    ClassificationClass,
+    Model,
+    ModelBand,
+    ModelType,
+    Satellite,
+)
 from app.utils import get_db
 
 router = APIRouter()
@@ -23,7 +30,7 @@ class ModelCreate(BaseModel):
     band_indices: list[int] = Field(
         ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     )
-    classification_classes: list[str] = Field(..., example=["Marine Debris"])
+    classification_classes: dict[str, int] = Field(..., example={"Marine debris": 0})
 
 
 @router.get("/model", tags=["Model"])
@@ -97,6 +104,20 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
     model_bands = [ModelBand(model_id=db_model.id, band_id=band.id) for band in bands]
     db.add_all(model_bands)
     db.commit()
+    db.refresh(db_model)
+
+    # create classification classes
+    classification_classes = [
+        ClassificationClass(
+            model_id=db_model.id,
+            name=classification_class,
+            index=index,
+        )
+        for classification_class, index in model.classification_classes.items()
+    ]
+    db.add_all(classification_classes)
+    db.commit()
+    db.refresh(db_model)
 
     return json.dumps(
         {
