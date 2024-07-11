@@ -18,6 +18,12 @@ SH_INSTANCE_ID="your_instance_id"
 SH_CLIENT_ID="your_client_id"
 SH_CLIENT_SECRET="your_client_secret"
 DEBUG="TRUE/FALSE"
+
+# AWS
+AWS_ACCESS_KEY_ID="your_aws_access_key"
+AWS_SECRET_ACCESS_KEY="you_aws_secret"
+GITHUB_TOKEN="your_github_token"
+
 ```
 
 ## Local Setup
