@@ -8,7 +8,15 @@ from sqlalchemy import func
 
 from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
-from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
+from app.db.models import (
+    AOI,
+    Image,
+    Job,
+    JobStatus,
+    Model,
+    PredictionRaster,
+    PredictionVector,
+)
 from app.utils import accuracy_limit_to_percent, percent_to_accuracy
 
 router = APIRouter()
@@ -67,11 +75,13 @@ async def get_predictions_by_day(
     ),
     aoi_id: int = Query(
         ...,
-        description="Id of the AOI in question for example: 1",
+    ),
+    model_id: str = Query(
+        default=None, description="Optional, filter predictions based on model"
     ),
     accuracy_limit: int = Query(
-        ...,
-        description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50",
+        default=None,
+        description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50. Only for SEGMENTATION models",
     ),
 ):
     session = Session()
@@ -82,38 +92,42 @@ async def get_predictions_by_day(
 
         startDate = datetime.fromtimestamp(day)
         endDate = startDate + timedelta(days=1)
-        max_pixel_value = round(percent_to_accuracy(accuracy_limit))
 
         query = (
-            (
-                session.query(
-                    AOI.id,
-                    Image.timestamp,
-                    Image.id,
-                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-                    PredictionVector.pixel_value,
-                )
-                .join(Job, Job.aoi_id == AOI.id)
-                .join(Image, Image.job_id == Job.id)
-                .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-                .join(
-                    PredictionVector,
-                    PredictionVector.prediction_raster_id == PredictionRaster.id,
-                )
-                .filter(
-                    Image.timestamp >= startDate,
-                    Image.timestamp < endDate,
-                    func.ST_Intersects(
-                        PredictionVector.geometry,
-                        AOI.geometry,
-                    ),
-                    AOI.id == aoi_id,
-                    PredictionVector.pixel_value >= max_pixel_value,
-                )
+            session.query(
+                AOI.id,
+                Image.timestamp,
+                Image.id,
+                Model.model_id,
+                Model.type,
+                Model.classification_classes,
+                func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                PredictionVector.pixel_value,
             )
-            .order_by(Image.timestamp)
-            .limit(DEFAULT_MAX_ROW_LIMIT)
+            .join(Job, Job.aoi_id == AOI.id)
+            .join(Image, Image.job_id == Job.id)
+            .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+            .join(
+                PredictionVector,
+                PredictionVector.prediction_raster_id == PredictionRaster.id,
+            )
+            .filter(
+                Image.timestamp >= startDate,
+                Image.timestamp < endDate,
+                func.ST_Intersects(
+                    PredictionVector.geometry,
+                    AOI.geometry,
+                ),
+                AOI.id == aoi_id,
+            )
         )
+        if model_id:
+            query = query.filter(Model.model_id == model_id)
+
+        if accuracy_limit:
+            max_pixel_value = round(percent_to_accuracy(accuracy_limit))
+            query = query.filter(PredictionVector.pixel_value >= max_pixel_value)
+        query = query.order_by(Image.timestamp).limit(DEFAULT_MAX_ROW_LIMIT)
         results = query.all()
         results_list = [
             {

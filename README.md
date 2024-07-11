@@ -16,6 +16,6 @@
 
 ---
 
-The Server is now running on http://localhost:8000. You can access the swagger docs on http://127.`0.0.1:8000/docs
+The Server is now running on http://localhost:8000. You can access the swagger docs on http://127.0.0.1:8000/docs
 
 Type "deactivate" to close the poetry shell.
