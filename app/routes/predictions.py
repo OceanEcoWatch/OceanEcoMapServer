@@ -10,10 +10,12 @@ from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import (
     AOI,
+    ClassificationClass,
     Image,
     Job,
     JobStatus,
     Model,
+    ModelType,
     PredictionRaster,
     PredictionVector,
 )
@@ -99,8 +101,10 @@ async def get_predictions_by_day(
                 Image.timestamp,
                 Image.id,
                 Model.model_id,
-                Model.type,
-                Model.classification_classes,
+                Model.type.label("model_type"),
+                func.array_agg(ClassificationClass.name).label(
+                    "classification_classes"
+                ),
                 func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
                 PredictionVector.pixel_value,
             )
@@ -111,6 +115,8 @@ async def get_predictions_by_day(
                 PredictionVector,
                 PredictionVector.prediction_raster_id == PredictionRaster.id,
             )
+            .join(Model, Model.id == Job.model_id)
+            .outerjoin(ClassificationClass, ClassificationClass.model_id == Model.id)
             .filter(
                 Image.timestamp >= startDate,
                 Image.timestamp < endDate,
@@ -120,23 +126,42 @@ async def get_predictions_by_day(
                 ),
                 AOI.id == aoi_id,
             )
+            .group_by(
+                AOI.id,
+                Image.timestamp,
+                Image.id,
+                Model.model_id,
+                Model.type,
+                PredictionVector.geometry,
+                PredictionVector.pixel_value,
+            )
         )
         if model_id:
+            model = (
+                session.query(Model).filter(Model.model_id == model_id).one_or_none()
+            )
+            if not model:
+                raise HTTPException(status_code=404, detail="Model not found")
             query = query.filter(Model.model_id == model_id)
 
         if accuracy_limit:
             max_pixel_value = round(percent_to_accuracy(accuracy_limit))
             query = query.filter(PredictionVector.pixel_value >= max_pixel_value)
+
         query = query.order_by(Image.timestamp).limit(DEFAULT_MAX_ROW_LIMIT)
         results = query.all()
         results_list = [
             {
                 "type": "Feature",
                 "properties": {
-                    "pixelValue": accuracy_limit_to_percent(row.pixel_value),
+                    "pixelValue": accuracy_limit_to_percent(row.pixel_value)
+                    if row.model_type == ModelType.SEGMENTATION
+                    else row.pixel_value,
                     "timestamp": row.timestamp.timestamp(),
+                    "modelId": row.model_id,
+                    "modelType": row.model_type.value,
+                    "classificationClasses": row.classification_classes,
                 },
-                # Ensuring row[0] is treated as a JSON string
                 "geometry": json.loads(row.geometry),
             }
             for row in results
