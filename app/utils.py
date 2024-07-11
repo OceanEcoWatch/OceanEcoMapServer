@@ -1,3 +1,7 @@
+import datetime
+
+from pytz import timezone
+
 from app.db.connect import Session
 
 
@@ -15,3 +19,11 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+async def get_start_of_day_unix_timestamp(date_time):
+    utc = date_time.astimezone(timezone.utc)
+    start_of_utc_day = datetime.datetime(
+        utc.year, utc.month, utc.day, tzinfo=timezone.utc
+    )
+    return start_of_utc_day.timestamp()
