@@ -25,8 +25,15 @@ async def get_job_by_aoi(
     aoiId: int = Query(
         description="The id of the AOI",
     ),
+    model_id: str = Query(
+        default=None,
+        description="The id of the model",
+    ),
     db: Session = Depends(get_db),
 ):
+    aoi = db.query(AOI).filter(AOI.id == aoiId).one_or_none()
+    if not aoi:
+        raise HTTPException(status_code=404, detail="AOI not found")
     query = (
         db.query(
             Job.id.label("Job_id"),
@@ -56,6 +63,9 @@ async def get_job_by_aoi(
         )
         .order_by(Job.id.desc(), Image.id.desc())
     )
+
+    if model_id:
+        query = query.filter(Job.model_id == model_id)
     results = query.all()
 
     jobs = []
