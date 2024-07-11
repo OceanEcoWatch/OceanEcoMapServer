@@ -39,7 +39,8 @@ async def get_aoi_centers_by_bbox(
             func.min(Image.timestamp).label("start_date"),
             func.max(Image.timestamp).label("end_date"),
             func.count(distinct(Image.timestamp)).label("image_count"),
-            func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
+            func.ST_AsGeoJSON(func.ST_Centroid(
+                AOI.geometry)).label("geometry"),
             func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
             func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo"),
         )
@@ -118,18 +119,27 @@ async def get_aoi_centers_by_bbox(
 @router.get("/aoi", tags=["AOI"])
 async def get_aoi_by_bbox(
     bbox: str | None = Query(
-        WORLD_WIDE_BBOX["query_str"],
-        description="Comma-separated bounding box coordinates minx,miny,maxx,maxy  - WGS84",
+        None,
+        description="Comma-separated bounding box coordinates minx,miny,maxx,maxy - WGS84",
+    ),
+    id: int | None = Query(
+        None,
+        description="Id of the aoi"
     ),
     threshold: int = Query(
         80,
         description="Minimum probability threshold for plastic detection (0-100)",
     ),
 ):
-    try:
-        parsed_bbox = parse_bbox(bbox)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Bad Request. {e}")
+    if bbox is None and id is None:
+        raise HTTPException(
+            status_code=400, detail="Either 'bbox' or 'id' must be provided.")
+
+    if bbox is not None:
+        try:
+            parsed_bbox = parse_bbox(bbox)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Bad Request. {e}")
 
     # Query for geometries within the bounding box
     session = Session()
@@ -154,7 +164,10 @@ async def get_aoi_by_bbox(
             ).label("plastic_timestamp_count"),
             func.ST_AsGeoJSON(AOI.geometry).label("geometry"),
         )
-        .filter(
+    )
+
+    if id is None:
+        query = query.filter(
             func.ST_Intersects(
                 AOI.geometry,
                 func.ST_MakeEnvelope(
@@ -167,16 +180,18 @@ async def get_aoi_by_bbox(
             ),
             AOI.is_deleted == False,  # noqa <E712>
         )
-        .join(Job, AOI.id == Job.aoi_id, isouter=True)
-        .join(Image, Job.id == Image.job_id, isouter=True)
-        .join(PredictionRaster, Image.id == PredictionRaster.image_id, isouter=True)
-        .join(
-            PredictionVector,
-            PredictionRaster.id == PredictionVector.prediction_raster_id,
-            isouter=True,
+    else:
+        query = query.filter(
+            AOI.id == id,
+            AOI.is_deleted == False,  # noqa <E712>
         )
-        .group_by(AOI.id)
-    )
+
+    query = query.join(Job, AOI.id == Job.aoi_id, isouter=True) \
+        .join(Image, Job.id == Image.job_id, isouter=True) \
+        .join(PredictionRaster, Image.id == PredictionRaster.image_id, isouter=True) \
+        .join(PredictionVector, PredictionRaster.id == PredictionVector.prediction_raster_id, isouter=True) \
+        .group_by(AOI.id, AOI.name, AOI.created_at, AOI.geometry)
+
     results = query.all()
     session.close()
 
@@ -245,7 +260,8 @@ async def create_aoi(
     try:
         aoi = AOI(
             name=name,
-            geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry.model_dump())),
+            geometry=func.ST_GeomFromGeoJSON(
+                json.dumps(geometry.model_dump())),
         )
         session.add(aoi)
         session.commit()
