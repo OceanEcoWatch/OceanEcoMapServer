@@ -23,7 +23,7 @@ class BandCreate(BaseModel):
 
 
 class SatelliteCreate(BaseModel):
-    name: str = Field(..., example="SENTINEL2_L1C")
+    name: str = Field(..., example="SENTINEL2_L2A")
     bands: list[BandCreate] = Field(
         ...,
         example=[
@@ -96,13 +96,6 @@ class SatelliteCreate(BaseModel):
                 "description": "Water vapor",
                 "resolution": 60.0,
                 "wavelength": "945nm",
-            },
-            {
-                "index": 11,
-                "name": "B10",
-                "description": "SWIR - Cirrus",
-                "resolution": 60.0,
-                "wavelength": "1375nm",
             },
             {
                 "index": 12,

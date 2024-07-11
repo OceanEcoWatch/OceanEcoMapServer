@@ -28,7 +28,7 @@ class ModelCreate(BaseModel):
     version: int = Field(..., example=1)
     satellite_name: str = Field(..., example="SENTINEL2_L2A")
     band_indices: list[int] = Field(
-        ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13]
     )
     classification_classes: dict[str, int] = Field(..., example={"Marine debris": 0})
 
@@ -126,7 +126,7 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
             "expected_image_height": db_model.expected_image_height,
             "expected_image_width": db_model.expected_image_width,
             "output_dtype": db_model.output_dtype,
-            "type": db_model.type,
+            "type": db_model.type.value,
             "version": db_model.version,
             "bands": [
                 {
@@ -137,6 +137,13 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
                     "wavelength": band.wavelength,
                 }
                 for band in bands
+            ],
+            "classification_classes": [
+                {
+                    "name": classification_class.name,
+                    "index": classification_class.index,
+                }
+                for classification_class in classification_classes
             ],
         }
     )
