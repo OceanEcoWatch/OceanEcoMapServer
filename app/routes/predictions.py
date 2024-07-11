@@ -10,7 +10,6 @@ from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
 from app.db.models import (
     AOI,
-    ClassificationClass,
     Image,
     Job,
     JobStatus,
@@ -92,8 +91,8 @@ async def get_predictions_by_day(
         if not aoi:
             raise HTTPException(status_code=404, detail="AOI not found")
 
-        startDate = datetime.fromtimestamp(day)
-        endDate = startDate + timedelta(days=1)
+        start_date = datetime.fromtimestamp(day)
+        end_date = start_date + timedelta(days=1)
 
         query = (
             session.query(
@@ -102,9 +101,6 @@ async def get_predictions_by_day(
                 Image.id,
                 Model.model_id,
                 Model.type.label("model_type"),
-                func.array_agg(ClassificationClass.name).label(
-                    "classification_classes"
-                ),
                 func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
                 PredictionVector.pixel_value,
             )
@@ -115,11 +111,10 @@ async def get_predictions_by_day(
                 PredictionVector,
                 PredictionVector.prediction_raster_id == PredictionRaster.id,
             )
-            .join(Model, Model.id == Job.model_id)
-            .outerjoin(ClassificationClass, ClassificationClass.model_id == Model.id)
+            .join(Model, Model.id == Job.model_id)  # Join with Model table
             .filter(
-                Image.timestamp >= startDate,
-                Image.timestamp < endDate,
+                Image.timestamp >= start_date,
+                Image.timestamp < end_date,
                 func.ST_Intersects(
                     PredictionVector.geometry,
                     AOI.geometry,
@@ -145,11 +140,12 @@ async def get_predictions_by_day(
             query = query.filter(Model.model_id == model_id)
 
         if accuracy_limit:
-            max_pixel_value = round(percent_to_accuracy(accuracy_limit))
+            max_pixel_value = percent_to_accuracy(accuracy_limit)
             query = query.filter(PredictionVector.pixel_value >= max_pixel_value)
 
         query = query.order_by(Image.timestamp).limit(DEFAULT_MAX_ROW_LIMIT)
         results = query.all()
+
         results_list = [
             {
                 "type": "Feature",
@@ -160,7 +156,6 @@ async def get_predictions_by_day(
                     "timestamp": row.timestamp.timestamp(),
                     "modelId": row.model_id,
                     "modelType": row.model_type.value,
-                    "classificationClasses": row.classification_classes,
                 },
                 "geometry": json.loads(row.geometry),
             }
