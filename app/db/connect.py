@@ -1,6 +1,7 @@
+from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+
 from app.config.config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL)
@@ -25,3 +26,11 @@ def safe_execute_query(session, query):
         session.rollback()
         error_message = f"Database error: {str(e)}"
         raise DatabaseError(error_message)
+
+
+def get_db():
+    db = Session()
+    try:
+        yield db
+    finally:
+        db.close()

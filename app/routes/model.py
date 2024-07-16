@@ -1,6 +1,7 @@
 import datetime
 import json
 
+from db.connect import get_db
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -13,7 +14,6 @@ from app.db.models import (
     ModelType,
     Satellite,
 )
-from app.utils import get_db
 
 router = APIRouter()
 

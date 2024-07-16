@@ -1,15 +1,14 @@
 import json
 
+from db.connect import get_db
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.db.connect import Session
 from app.db.models import (
     Band,
     Satellite,
 )
-from app.utils import get_db
 
 router = APIRouter()
 

@@ -1,6 +1,7 @@
 import datetime
 import json
 
+from db.connect import get_db
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func
 
@@ -15,7 +16,6 @@ from app.db.models import (
     PredictionRaster,
     PredictionVector,
 )
-from app.utils import get_db
 
 router = APIRouter()
 

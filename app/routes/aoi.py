@@ -1,6 +1,7 @@
 import json
 
 import geopandas as gpd
+from db.connect import get_db
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ from app.db.connect import Session
 from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
 from app.services.utils import determine_utm_epsg, parse_bbox
 from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
-from app.utils import get_db, percent_to_accuracy
+from app.utils import percent_to_accuracy
 
 router = APIRouter()
 
