@@ -1,11 +1,11 @@
 import datetime
 import json
 
-from db.connect import get_db
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.db.connect import Session
+from app.db.connect import Session, get_db
 from app.db.models import (
     Band,
     ClassificationClass,
@@ -19,7 +19,8 @@ router = APIRouter()
 
 
 class ModelCreate(BaseModel):
-    model_id: str = Field(..., example="oceanecowatch/plasticdetectionmodel:1.0.1")
+    model_id: str = Field(...,
+                          example="oceanecowatch/plasticdetectionmodel:1.0.1")
     model_url: str = Field(...)
     expected_image_height: int = Field(..., example=480)
     expected_image_width: int = Field(..., example=480)
@@ -30,7 +31,8 @@ class ModelCreate(BaseModel):
     band_indices: list[int] = Field(
         ..., example=[1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13]
     )
-    classification_classes: dict[str, int] = Field(..., example={"Marine debris": 0})
+    classification_classes: dict[str, int] = Field(..., example={
+                                                   "Marine debris": 0})
 
 
 @router.get("/model", tags=["Model"])
@@ -71,7 +73,8 @@ async def get_model(
 def create_model(model: ModelCreate, db: Session = Depends(get_db)):
     # Check if the satellite exists by name
     satellite = (
-        db.query(Satellite).filter(Satellite.name == model.satellite_name).first()
+        db.query(Satellite).filter(
+            Satellite.name == model.satellite_name).first()
     )
     if not satellite:
         return HTTPException(
@@ -101,7 +104,8 @@ def create_model(model: ModelCreate, db: Session = Depends(get_db)):
     )
 
     # Create ModelBand instances
-    model_bands = [ModelBand(model_id=db_model.id, band_id=band.id) for band in bands]
+    model_bands = [ModelBand(model_id=db_model.id, band_id=band.id)
+                   for band in bands]
     db.add_all(model_bands)
     db.commit()
     db.refresh(db_model)

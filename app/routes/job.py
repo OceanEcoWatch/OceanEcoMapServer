@@ -1,12 +1,11 @@
 import datetime
 import json
 
-from db.connect import get_db
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func
 
 from app.constants.spec import MAX_JOB_TIME_RANGE_DAYS
-from app.db.connect import Session
+from app.db.connect import Session, get_db
 from app.db.models import (
     AOI,
     Image,

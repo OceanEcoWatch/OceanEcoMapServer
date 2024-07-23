@@ -1,7 +1,6 @@
 import json
 
 import geopandas as gpd
-from db.connect import get_db
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -10,7 +9,7 @@ from sqlalchemy import case, distinct, func
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.constants.spec import MAX_AOI_SQKM
-from app.db.connect import Session
+from app.db.connect import Session, get_db
 from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
 from app.services.utils import determine_utm_epsg, parse_bbox
 from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
@@ -46,7 +45,8 @@ async def get_aoi_centers_by_bbox(
             func.min(Image.timestamp).label("start_date"),
             func.max(Image.timestamp).label("end_date"),
             func.count(distinct(Image.timestamp)).label("image_count"),
-            func.ST_AsGeoJSON(func.ST_Centroid(AOI.geometry)).label("geometry"),
+            func.ST_AsGeoJSON(func.ST_Centroid(
+                AOI.geometry)).label("geometry"),
             func.ST_AsText(AOI.geometry).label("aoi_as_wkt"),
             func.ST_AsGeoJSON(AOI.geometry).label("aoi_geo"),
         )
