@@ -1,4 +1,30 @@
-# OEW Backend
+# Ocean Eco Watch Backend
+
+Yayyy! You found the Ocean Eco Watch backend! Here you find a FAST-API backend which main purpose it is to serve data from the DB to the [Frontend Map Application](https://github.com/OceanEcoWatch/OceanEcoWatchMap/tree/main#).
+
+## Environment Variables
+
+```
+# DATABASE
+DB_USER="your_user"
+DB_PW="your_password"
+DB_NAME="your_db"
+DB_HOST="your_host"
+DB_PORT="your_port"
+
+# SENTINEL HUB
+
+SH_INSTANCE_ID="your_instance_id"
+SH_CLIENT_ID="your_client_id"
+SH_CLIENT_SECRET="your_client_secret"
+DEBUG="TRUE/FALSE"
+
+# AWS
+AWS_ACCESS_KEY_ID="your_aws_access_key"
+AWS_SECRET_ACCESS_KEY="you_aws_secret"
+GITHUB_TOKEN="your_github_token"
+
+```
 
 ## Local Setup
 
