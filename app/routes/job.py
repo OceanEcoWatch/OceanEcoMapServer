@@ -1,12 +1,13 @@
 import datetime
 import json
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func
 
 from app.constants.spec import MAX_JOB_TIME_RANGE_DAYS
-from app.db.connect import Session
+from app.db.connect import Session, get_db
 from app.db.models import (
+    AOI,
     Image,
     Job,
     JobStatus,
@@ -23,10 +24,17 @@ async def get_job_by_aoi(
     aoiId: int = Query(
         description="The id of the AOI",
     ),
+    model_id: str = Query(
+        default=None,
+        description="The id of the model",
+    ),
+    db: Session = Depends(get_db),
 ):
-    session = Session()
+    aoi = db.query(AOI).filter(AOI.id == aoiId).one_or_none()
+    if not aoi:
+        raise HTTPException(status_code=404, detail="AOI not found")
     query = (
-        session.query(
+        db.query(
             Job.id.label("Job_id"),
             Job.status,
             Job.created_at,
@@ -35,7 +43,6 @@ async def get_job_by_aoi(
             Image.id.label("Image_id"),
             Image.image_url,
             Image.timestamp,
-            Image.provider,
             PredictionVector.pixel_value,
             func.ST_AsGeoJSON(PredictionVector.geometry).label(
                 "PredictionVector_geometry"
@@ -55,8 +62,10 @@ async def get_job_by_aoi(
         )
         .order_by(Job.id.desc(), Image.id.desc())
     )
+
+    if model_id:
+        query = query.filter(Job.model_id == model_id)
     results = query.all()
-    session.close()
 
     jobs = []
 
@@ -84,7 +93,6 @@ async def get_job_by_aoi(
                     "image_id": row.Image_id,
                     "image_url": row.image_url,
                     "timestamp": row.timestamp.timestamp(),
-                    "provider": row.provider,
                     "predictions": [],
                 }
             )
@@ -158,55 +166,32 @@ async def create_job(
         description="If true, multiple jobs will be created. For every 31 days in the time range a new job will be created.",
         default=False,
     ),
+    db: Session = Depends(get_db),
 ):
-    session = Session()
-    try:
-        if create_multiple:
-            date_ranges = split_date_range(start_date, end_date)
-        else:
-            enforce_time_range(start_date, end_date)
-            date_ranges = [(start_date, end_date)]
+    if create_multiple:
+        date_ranges = split_date_range(start_date, end_date)
+    else:
+        enforce_time_range(start_date, end_date)
+        date_ranges = [(start_date, end_date)]
 
-        json_jobs = []
-
-        for start, end in date_ranges:
-            job = Job(
-                status=JobStatus.PENDING,
-                start_date=start,
-                end_date=end,
-                model_id=model_id,
-                aoi_id=aoi_id,
-                maxcc=maxcc,
-            )
-            session.add(job)
-            session.commit()
-            json_job = {
-                "job_id": job.id,
-                "status": str(job.status.value),
-                "created_at": job.created_at.isoformat(),
-                "start_date": job.start_date.isoformat(),
-                "end_date": job.end_date.isoformat(),
-                "maxcc": job.maxcc,
-                "model_id": job.model_id,
-                "images": [],
-            }
-            json_jobs.append(json_job)
-
-    finally:
-        session.close()
-
-    return json.dumps(json_jobs, ensure_ascii=False)
-
-
-@router.get("/jobs/{job_id}", tags=["Jobs"])
-async def get_job_by_id(job_id: int):
-    session = Session()
-    try:
-        job = session.query(Job).filter(Job.id == job_id).one_or_none()
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        return {
+    json_jobs = []
+    if db.query(Model).filter(Model.id == model_id).count() == 0:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if db.query(AOI).filter(AOI.id == aoi_id).count() == 0:
+        raise HTTPException(status_code=404, detail="AOI not found")
+    for start, end in date_ranges:
+        job = Job(
+            status=JobStatus.PENDING,
+            start_date=start,
+            end_date=end,
+            model_id=model_id,
+            aoi_id=aoi_id,
+            maxcc=maxcc,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        json_job = {
             "job_id": job.id,
             "status": str(job.status.value),
             "created_at": job.created_at.isoformat(),
@@ -214,7 +199,25 @@ async def get_job_by_id(job_id: int):
             "end_date": job.end_date.isoformat(),
             "maxcc": job.maxcc,
             "model_id": job.model_id,
+            "images": [],
         }
+        json_jobs.append(json_job)
 
-    finally:
-        session.close()
+    return json.dumps(json_jobs, ensure_ascii=False)
+
+
+@router.get("/jobs/{job_id}", tags=["Jobs"])
+async def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.id == job_id).one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return {
+        "job_id": job.id,
+        "status": str(job.status.value),
+        "created_at": job.created_at.isoformat(),
+        "start_date": job.start_date.isoformat(),
+        "end_date": job.end_date.isoformat(),
+        "maxcc": job.maxcc,
+        "model_id": job.model_id,
+    }

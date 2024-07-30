@@ -1,20 +1,26 @@
 import json
 
 import geopandas as gpd
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from shapely.geometry import shape
 from sqlalchemy import case, distinct, func
 
 from app.constants.geo import STANDARD_CRS, WORLD_WIDE_BBOX
 from app.constants.spec import MAX_AOI_SQKM
-from app.db.connect import Session
+from app.db.connect import Session, get_db
 from app.db.models import AOI, Image, Job, PredictionRaster, PredictionVector
 from app.services.utils import determine_utm_epsg, parse_bbox
 from app.types.helpers import PolygonFeature, PolygonFeatureCollection, PolygonGeoJSON
 from app.utils import percent_to_accuracy
 
 router = APIRouter()
+
+
+class AOICreate(BaseModel):
+    name: str
+    geometry: PolygonGeoJSON
 
 
 @router.get("/aoi-centers", tags=["AOI"])
@@ -130,6 +136,7 @@ async def get_aoi_by_bbox(
         80,
         description="Minimum probability threshold for plastic detection (0-100)",
     ),
+    db: Session = Depends(get_db),
 ):
     if bbox is None and id is None:
         raise HTTPException(
@@ -142,9 +149,9 @@ async def get_aoi_by_bbox(
             raise HTTPException(status_code=400, detail=f"Bad Request. {e}")
 
     # Query for geometries within the bounding box
-    session = Session()
+
     query = (
-        session.query(
+        db.query(
             AOI.id,
             AOI.name,
             AOI.created_at,
@@ -193,7 +200,6 @@ async def get_aoi_by_bbox(
         .group_by(AOI.id, AOI.name, AOI.created_at, AOI.geometry)
 
     results = query.all()
-    session.close()
 
     results_list = [
         {
@@ -233,6 +239,7 @@ async def create_aoi(
     geometry: PolygonGeoJSON = Body(
         description="Polygon GeoJSON object representing the AOI. If a FeatureCollection is provided, only the first feature will be used.",
     ),
+    db: Session = Depends(get_db),
 ):
     if isinstance(geometry, PolygonFeatureCollection):
         geometry = geometry.features[0].geometry
@@ -256,24 +263,21 @@ async def create_aoi(
     area_km2 = localized_polygon.area / 1e6
 
     enforce_max_aoi_area(area_km2)
-    session = Session()
-    try:
-        aoi = AOI(
-            name=name,
-            geometry=func.ST_GeomFromGeoJSON(
-                json.dumps(geometry.model_dump())),
-        )
-        session.add(aoi)
-        session.commit()
 
-        json_aoi = json.dumps(
-            {
-                "id": aoi.id,
-                "name": aoi.name,
-                "created_at": aoi.created_at.isoformat(),
-            }
-        )
-    finally:
-        session.close()
+    aoi = AOI(
+        name=name,
+        geometry=func.ST_GeomFromGeoJSON(json.dumps(geometry.model_dump())),
+    )
+    db.add(aoi)
+    db.commit()
+    db.refresh(aoi)
+
+    json_aoi = json.dumps(
+        {
+            "id": aoi.id,
+            "name": aoi.name,
+            "created_at": aoi.created_at.isoformat(),
+        }
+    )
 
     return json_aoi

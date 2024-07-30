@@ -8,7 +8,16 @@ from sqlalchemy import func
 
 from app.config.config import DEFAULT_MAX_ROW_LIMIT, GITHUB_TOKEN
 from app.db.connect import Session
-from app.db.models import AOI, Image, Job, JobStatus, PredictionRaster, PredictionVector
+from app.db.models import (
+    AOI,
+    Image,
+    Job,
+    JobStatus,
+    Model,
+    ModelType,
+    PredictionRaster,
+    PredictionVector,
+)
 from app.utils import (
     accuracy_limit_to_percent,
     get_start_of_day_unix_timestamp,
@@ -65,11 +74,13 @@ async def get_predictions_by_day(
     ),
     aoi_id: int = Query(
         ...,
-        description="Id of the AOI in question for example: 1",
+    ),
+    model_id: str = Query(
+        default=None, description="Optional, filter predictions based on model"
     ),
     accuracy_limit: int = Query(
-        ...,
-        description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50",
+        default=None,
+        description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50. Only for SEGMENTATION models",
     ),
 ):
     session = Session()
@@ -78,49 +89,72 @@ async def get_predictions_by_day(
         if not aoi:
             raise HTTPException(status_code=404, detail="AOI not found")
 
-        startDate = datetime.fromtimestamp(day)
-        endDate = startDate + timedelta(days=1)
-        max_pixel_value = round(percent_to_accuracy(accuracy_limit))
+        start_date = datetime.fromtimestamp(day)
+        end_date = start_date + timedelta(days=1)
 
         query = (
-            (
-                session.query(
-                    AOI.id,
-                    Image.timestamp,
-                    Image.id,
-                    func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
-                    PredictionVector.pixel_value,
-                )
-                .join(Job, Job.aoi_id == AOI.id)
-                .join(Image, Image.job_id == Job.id)
-                .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-                .join(
-                    PredictionVector,
-                    PredictionVector.prediction_raster_id == PredictionRaster.id,
-                )
-                .filter(
-                    Image.timestamp >= startDate,
-                    Image.timestamp < endDate,
-                    func.ST_Intersects(
-                        PredictionVector.geometry,
-                        AOI.geometry,
-                    ),
-                    AOI.id == aoi_id,
-                    PredictionVector.pixel_value >= max_pixel_value,
-                )
+            session.query(
+                AOI.id,
+                Image.timestamp,
+                Image.id,
+                Model.model_id,
+                Model.type.label("model_type"),
+                func.ST_AsGeoJSON(PredictionVector.geometry).label("geometry"),
+                PredictionVector.pixel_value,
             )
-            .order_by(Image.timestamp)
-            .limit(DEFAULT_MAX_ROW_LIMIT)
+            .join(Job, Job.aoi_id == AOI.id)
+            .join(Image, Image.job_id == Job.id)
+            .join(PredictionRaster, PredictionRaster.image_id == Image.id)
+            .join(
+                PredictionVector,
+                PredictionVector.prediction_raster_id == PredictionRaster.id,
+            )
+            .join(Model, Model.id == Job.model_id)  # Join with Model table
+            .filter(
+                Image.timestamp >= start_date,
+                Image.timestamp < end_date,
+                func.ST_Intersects(
+                    PredictionVector.geometry,
+                    AOI.geometry,
+                ),
+                AOI.id == aoi_id,
+            )
+            .group_by(
+                AOI.id,
+                Image.timestamp,
+                Image.id,
+                Model.model_id,
+                Model.type,
+                PredictionVector.geometry,
+                PredictionVector.pixel_value,
+            )
         )
+        if model_id:
+            model = (
+                session.query(Model).filter(Model.model_id == model_id).one_or_none()
+            )
+            if not model:
+                raise HTTPException(status_code=404, detail="Model not found")
+            query = query.filter(Model.model_id == model_id)
+
+        if accuracy_limit:
+            max_pixel_value = percent_to_accuracy(accuracy_limit)
+            query = query.filter(PredictionVector.pixel_value >= max_pixel_value)
+
+        query = query.order_by(Image.timestamp).limit(DEFAULT_MAX_ROW_LIMIT)
         results = query.all()
+
         results_list = [
             {
                 "type": "Feature",
                 "properties": {
-                    "pixelValue": accuracy_limit_to_percent(row.pixel_value),
+                    "pixelValue": accuracy_limit_to_percent(row.pixel_value)
+                    if row.model_type == ModelType.SEGMENTATION
+                    else row.pixel_value,
                     "timestamp": row.timestamp.timestamp(),
+                    "modelId": row.model_id,
+                    "modelType": row.model_type.value,
                 },
-                # Ensuring row[0] is treated as a JSON string
                 "geometry": json.loads(row.geometry),
             }
             for row in results
