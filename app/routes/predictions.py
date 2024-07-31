@@ -72,12 +72,8 @@ async def get_predictions_by_day(
         ...,
         description="Unix Timestamp of the day in question. The timestamp will set the beginning of a 24hr time range. The endpoint will return all predictions for the area of the aoi in this timeframe.",
     ),
-    aoi_id: int = Query(
-        ...,
-    ),
-    model_id: str = Query(
-        default=None, description="Optional, filter predictions based on model"
-    ),
+    aoi_id: int = Query(...),
+    model_id: str = Query(description="Filter predictions based on model"),
     accuracy_limit: int = Query(
         default=None,
         description="The minimum accuracy of the prediction to be included in the results lowest value: 0 (returning all data) | highest value: 100 (returning minimal data). For example: 50. Only for SEGMENTATION models",
@@ -88,6 +84,11 @@ async def get_predictions_by_day(
         aoi = session.query(AOI).filter(AOI.id == aoi_id).one_or_none()
         if not aoi:
             raise HTTPException(status_code=404, detail="AOI not found")
+
+        model = session.query(Model).filter(
+            Model.model_id == model_id).one_or_none()
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
 
         start_date = datetime.fromtimestamp(day)
         end_date = start_date + timedelta(days=1)
@@ -105,19 +106,14 @@ async def get_predictions_by_day(
             .join(Job, Job.aoi_id == AOI.id)
             .join(Image, Image.job_id == Job.id)
             .join(PredictionRaster, PredictionRaster.image_id == Image.id)
-            .join(
-                PredictionVector,
-                PredictionVector.prediction_raster_id == PredictionRaster.id,
-            )
-            .join(Model, Model.id == Job.model_id)  # Join with Model table
+            .join(PredictionVector, PredictionVector.prediction_raster_id == PredictionRaster.id)
+            .join(Model, Model.id == Job.model_id)
             .filter(
                 Image.timestamp >= start_date,
                 Image.timestamp < end_date,
-                func.ST_Intersects(
-                    PredictionVector.geometry,
-                    AOI.geometry,
-                ),
+                func.ST_Intersects(PredictionVector.geometry, AOI.geometry),
                 AOI.id == aoi_id,
+                Model.model_id == model_id,
             )
             .group_by(
                 AOI.id,
@@ -129,19 +125,23 @@ async def get_predictions_by_day(
                 PredictionVector.pixel_value,
             )
         )
-        if model_id:
-            model = (
-                session.query(Model).filter(Model.model_id == model_id).one_or_none()
-            )
-            if not model:
-                raise HTTPException(status_code=404, detail="Model not found")
-            query = query.filter(Model.model_id == model_id)
 
-        if accuracy_limit:
+        if accuracy_limit is not None:
+            if model.type != ModelType.SEGMENTATION:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Accuracy limit only applicable for segmentation models",
+                )
             max_pixel_value = percent_to_accuracy(accuracy_limit)
-            query = query.filter(PredictionVector.pixel_value >= max_pixel_value)
+            query = query.filter(
+                PredictionVector.pixel_value >= max_pixel_value)
+
+        if model.type == ModelType.CLASSIFICATION:
+            # Only return Marine Debris
+            query = query.filter(PredictionVector.pixel_value == 1)
 
         query = query.order_by(Image.timestamp).limit(DEFAULT_MAX_ROW_LIMIT)
+        # print("Generated SQL query:", str(query))
         results = query.all()
 
         results_list = [
@@ -255,7 +255,8 @@ async def run_prediction_jobs(
                     status_code=500,
                     detail=f"Error running prediction job for job ID {job_id}: {err}",
                 )
-            results.append({"job_id": job_id, "message": "Prediction job started"})
+            results.append(
+                {"job_id": job_id, "message": "Prediction job started"})
 
     finally:
         session.close()

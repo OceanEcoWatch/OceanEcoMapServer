@@ -51,7 +51,7 @@ else:  # in Production get the secrets from AWS
     print("PRODUCTION MODE")
     print(DB_USER)
 
-DEFAULT_MAX_ROW_LIMIT = 1000
+DEFAULT_MAX_ROW_LIMIT = 100000
 DATABASE_URL = URL.create(
     "postgresql",
     username=DB_USER,
