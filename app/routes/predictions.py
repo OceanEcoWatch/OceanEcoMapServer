@@ -25,6 +25,7 @@ from app.utils import (
 )
 
 router = APIRouter()
+CLASSIFICATION_PIXEL_VALUE_CONSTANT = 99
 
 
 @router.get("/images-by-day", tags=["AOI"])
@@ -148,9 +149,7 @@ async def get_predictions_by_day(
             {
                 "type": "Feature",
                 "properties": {
-                    "pixelValue": accuracy_limit_to_percent(row.pixel_value)
-                    if row.model_type == ModelType.SEGMENTATION
-                    else row.pixel_value,
+                    "pixelValue": accuracy_limit_to_percent(row.pixel_value) if row.model_type == ModelType.SEGMENTATION else CLASSIFICATION_PIXEL_VALUE_CONSTANT,
                     "timestamp": row.timestamp.timestamp(),
                     "modelId": row.model_id,
                     "modelType": row.model_type.value,
